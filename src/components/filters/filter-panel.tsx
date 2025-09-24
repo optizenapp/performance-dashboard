@@ -223,10 +223,11 @@ export function FilterPanel({
 
       {/* Metrics Selector */}
       <MetricSelector
-        selectedMetrics={filters.metrics}
+        selectedMetrics={filters.metrics.filter(metric => metric !== 'volume' && metric !== 'traffic')}
         onMetricsChange={(metrics) => updateFilters({ metrics: metrics as ('clicks' | 'impressions' | 'ctr' | 'position' | 'volume' | 'traffic')[] })}
         selectedSources={filters.sources}
         onSourcesChange={(sources) => updateFilters({ sources: sources as ('gsc' | 'ahrefs')[] })}
+        availableMetrics={filters.metrics.filter(metric => metric !== 'volume' && metric !== 'traffic')}
       />
 
       {/* Advanced Filters - Only show when expanded */}

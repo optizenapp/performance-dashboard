@@ -33,6 +33,7 @@ interface DataTableProps {
   description?: string;
   loading?: boolean;
   onExport?: (format: 'csv' | 'json') => void;
+  enableComparison?: boolean;
 }
 
 type SortField = keyof TableRowType;
@@ -44,6 +45,7 @@ export function DataTable({
   description = 'Detailed metrics for your queries and pages',
   loading = false,
   onExport,
+  enableComparison = false,
 }: DataTableProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [sortField, setSortField] = useState<SortField>('clicks');
@@ -305,7 +307,15 @@ export function DataTable({
                   </Button>
                 </TableHead>
                 <TableHead>Source</TableHead>
-                <TableHead>Change</TableHead>
+                {enableComparison && (
+                  <>
+                    <TableHead>Clicks Change</TableHead>
+                    <TableHead>Impressions Change</TableHead>
+                    <TableHead>CTR Change</TableHead>
+                    <TableHead>Position Change</TableHead>
+                  </>
+                )}
+                <TableHead>Traffic Change</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -364,6 +374,63 @@ export function DataTable({
                       {row.source.toUpperCase()}
                     </Badge>
                   </TableCell>
+                  {enableComparison && (
+                    <>
+                      {/* Clicks Change */}
+                      <TableCell>
+                        {row.clicksChange !== undefined ? (
+                          <div className={cn('flex items-center space-x-1', getChangeColor(row.clicksChange))}>
+                            {getChangeIcon(row.clicksChange)}
+                            <span className="text-sm font-medium">
+                              {row.clicksChange > 0 ? '+' : ''}{row.clicksChange}%
+                            </span>
+                          </div>
+                        ) : (
+                          <span className="text-gray-400">-</span>
+                        )}
+                      </TableCell>
+                      {/* Impressions Change */}
+                      <TableCell>
+                        {row.impressionsChange !== undefined ? (
+                          <div className={cn('flex items-center space-x-1', getChangeColor(row.impressionsChange))}>
+                            {getChangeIcon(row.impressionsChange)}
+                            <span className="text-sm font-medium">
+                              {row.impressionsChange > 0 ? '+' : ''}{row.impressionsChange}%
+                            </span>
+                          </div>
+                        ) : (
+                          <span className="text-gray-400">-</span>
+                        )}
+                      </TableCell>
+                      {/* CTR Change */}
+                      <TableCell>
+                        {row.ctrChange !== undefined ? (
+                          <div className={cn('flex items-center space-x-1', getChangeColor(row.ctrChange))}>
+                            {getChangeIcon(row.ctrChange)}
+                            <span className="text-sm font-medium">
+                              {row.ctrChange > 0 ? '+' : ''}{row.ctrChange}%
+                            </span>
+                          </div>
+                        ) : (
+                          <span className="text-gray-400">-</span>
+                        )}
+                      </TableCell>
+                      {/* Position Change */}
+                      <TableCell>
+                        {row.positionChange !== undefined ? (
+                          <div className={cn('flex items-center space-x-1', getChangeColor(-row.positionChange))}>
+                            {getChangeIcon(-row.positionChange)}
+                            <span className="text-sm font-medium">
+                              {row.positionChange > 0 ? '+' : ''}{row.positionChange}%
+                            </span>
+                          </div>
+                        ) : (
+                          <span className="text-gray-400">-</span>
+                        )}
+                      </TableCell>
+                    </>
+                  )}
+                  {/* Traffic Change (Ahrefs only) */}
                   <TableCell>
                     {row.change !== undefined ? (
                       <div className={cn('flex items-center space-x-1', getChangeColor(row.change))}>

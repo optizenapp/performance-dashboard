@@ -76,9 +76,9 @@ export function MetricSelector({
       <CardHeader>
         <div className="flex items-center justify-between">
           <div>
-            <CardTitle className="text-lg">Metrics</CardTitle>
+            <CardTitle className="text-lg">Overview Chart Metrics</CardTitle>
             <CardDescription>
-              Select the metrics you want to analyze
+              Select the metrics you want to display in the chart
             </CardDescription>
           </div>
           <div className="flex space-x-2">

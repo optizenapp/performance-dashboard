@@ -20,6 +20,7 @@ export default function Dashboard() {
   const [data, setData] = useState<NormalizedMetric[]>([]);
   const [loading, setLoading] = useState(false);
   const [selectedChartMetrics, setSelectedChartMetrics] = useState<string[]>(['clicks']);
+  const [tableSourceFilter, setTableSourceFilter] = useState<string>('both'); // 'both', 'gsc', 'ahrefs'
 
   // Remove 'volume' and 'traffic' from chart metrics if they exist (Ahrefs point-in-time data not suitable for time series)
   useEffect(() => {
@@ -31,6 +32,9 @@ export default function Dashboard() {
     dateRange: getDateRangePreset('last_30_days'),
     metrics: ['clicks', 'impressions', 'ctr', 'position'],
     sources: [SOURCES.GSC, SOURCES.AHREFS],
+    enableComparison: false,
+    comparisonPreset: undefined,
+    comparisonDateRange: undefined,
   });
 
 
@@ -144,6 +148,14 @@ export default function Dashboard() {
     return allChartData;
   }, [filteredData, selectedChartMetrics]);
   const tableData = prepareTableData(filteredData, filters.enableComparison);
+  
+  // Filter table data by source
+  const filteredTableData = useMemo(() => {
+    if (tableSourceFilter === 'both') return tableData;
+    if (tableSourceFilter === 'gsc') return tableData.filter(row => row.source === 'GSC' || row.source === 'Both');
+    if (tableSourceFilter === 'ahrefs') return tableData.filter(row => row.source === 'Ahrefs' || row.source === 'Both');
+    return tableData;
+  }, [tableData, tableSourceFilter]);
 
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -525,10 +537,48 @@ search console api,https://example.com/api-docs,12,500,25,3.20,80,2024-01-01,60,
             showComparison={filters.sources.length > 1}
           />
 
-          <DataTable
-            data={tableData}
-            loading={loading}
-          />
+          {/* Performance Data Table */}
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle>Performance Data</CardTitle>
+                  <CardDescription>
+                    Detailed metrics for your queries and pages
+                  </CardDescription>
+                </div>
+                <div className="flex items-center space-x-4">
+                  <span className="text-sm font-medium text-gray-700">Filter by source:</span>
+                  <div className="flex space-x-2">
+                    {[
+                      { value: 'both', label: 'Both Sources' },
+                      { value: 'gsc', label: 'GSC Only' },
+                      { value: 'ahrefs', label: 'Ahrefs Only' }
+                    ].map((option) => (
+                      <Button
+                        key={option.value}
+                        variant={tableSourceFilter === option.value ? 'default' : 'outline'}
+                        size="sm"
+                        onClick={() => setTableSourceFilter(option.value)}
+                        className="text-xs"
+                      >
+                        {option.label}
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <DataTable
+                data={filteredTableData}
+                loading={loading}
+                title=""
+                description=""
+                enableComparison={filters.enableComparison}
+              />
+            </CardContent>
+          </Card>
 
           {/* Performance Clusters */}
           <PerformanceClusters
