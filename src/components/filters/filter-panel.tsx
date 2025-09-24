@@ -11,7 +11,8 @@ import { X, Filter, RotateCcw, TrendingUp } from 'lucide-react';
 import { DateRangePicker } from './date-range-picker';
 import { MetricSelector } from './metric-selector';
 import { FilterOptions, SOURCES } from '@/lib/types';
-import { getComparisonDateRange } from '@/lib/data-utils';
+import { getComparisonDateRange, getComparisonPresetRanges } from '@/lib/data-utils';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
 import { Switch } from '@/components/ui/switch';
 
@@ -143,57 +144,6 @@ export function FilterPanel({
             onDateRangeChange={(dateRange) => updateFilters({ dateRange })}
           />
           
-          {/* Comparison Toggle */}
-          <div className="flex items-center justify-between pt-4 border-t">
-            <div className="flex items-center space-x-2">
-              <TrendingUp className="h-4 w-4 text-blue-600" />
-              <Label htmlFor="comparison-toggle" className="text-sm font-medium">
-                Compare with previous period
-              </Label>
-            </div>
-            <Switch
-              id="comparison-toggle"
-              checked={filters.enableComparison || false}
-              onCheckedChange={(checked) => {
-                const updates: Partial<FilterOptions> = { enableComparison: checked };
-                if (checked && !filters.comparisonDateRange) {
-                  updates.comparisonDateRange = getComparisonDateRange(filters.dateRange);
-                }
-                updateFilters(updates);
-              }}
-            />
-          </div>
-          
-          {/* Comparison Date Range */}
-          {filters.enableComparison && (
-            <div className="space-y-2 pt-2">
-              <Label className="text-sm text-gray-600">Comparison Period</Label>
-              <DateRangePicker
-                dateRange={filters.comparisonDateRange || getComparisonDateRange(filters.dateRange)}
-                onDateRangeChange={(comparisonDateRange) => updateFilters({ comparisonDateRange })}
-              />
-              <div className="flex space-x-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => updateFilters({ 
-                    comparisonDateRange: getComparisonDateRange(filters.dateRange, 'previous_period') 
-                  })}
-                >
-                  Previous Period
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => updateFilters({ 
-                    comparisonDateRange: getComparisonDateRange(filters.dateRange, 'previous_year') 
-                  })}
-                >
-                  Previous Year
-                </Button>
-              </div>
-            </div>
-          )}
         </CardContent>
       </Card>
 
@@ -242,6 +192,146 @@ export function FilterPanel({
               <span className="font-medium">Ahrefs</span>
             </div>
           </div>
+        </CardContent>
+      </Card>
+
+      {/* Comparison Settings */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base flex items-center space-x-2">
+            <TrendingUp className="h-4 w-4 text-blue-600" />
+            <span>Comparison Settings</span>
+          </CardTitle>
+          <CardDescription>
+            Configure how to fetch and compare data from different time periods
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {/* Enable Comparison Toggle */}
+          <div className="flex items-center justify-between">
+            <Label htmlFor="comparison-toggle" className="text-sm font-medium">
+              Enable Comparison Mode
+            </Label>
+            <Switch
+              id="comparison-toggle"
+              checked={filters.enableComparison || false}
+              onCheckedChange={(checked) => {
+                const updates: Partial<FilterOptions> = { enableComparison: checked };
+                if (checked) {
+                  updates.comparisonPreset = 'last_28d_vs_previous';
+                  const ranges = getComparisonPresetRanges('last_28d_vs_previous');
+                  updates.dateRange = ranges.primary;
+                  updates.comparisonDateRange = ranges.comparison;
+                }
+                updateFilters(updates);
+              }}
+            />
+          </div>
+          
+          {/* Comparison Options */}
+          {filters.enableComparison && (
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">Comparison Period</Label>
+                <Select
+                  value={filters.comparisonPreset || 'last_28d_vs_previous'}
+                  onValueChange={(preset) => {
+                    if (preset === 'custom') {
+                      updateFilters({ comparisonPreset: preset });
+                    } else {
+                      const ranges = getComparisonPresetRanges(preset);
+                      updateFilters({
+                        comparisonPreset: preset,
+                        dateRange: ranges.primary,
+                        comparisonDateRange: ranges.comparison,
+                      });
+                    }
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="last_24h_vs_previous">Compare last 24 hours to previous period</SelectItem>
+                    <SelectItem value="last_24h_vs_week_ago">Compare last 24 hours week over week</SelectItem>
+                    <SelectItem value="last_7d_vs_previous">Compare last 7 days to previous period</SelectItem>
+                    <SelectItem value="last_7d_vs_year_ago">Compare last 7 days year over year</SelectItem>
+                    <SelectItem value="last_28d_vs_previous">Compare last 28 days to previous period</SelectItem>
+                    <SelectItem value="last_28d_vs_year_ago">Compare last 28 days year over year</SelectItem>
+                    <SelectItem value="last_3m_vs_previous">Compare last 3 months to previous period</SelectItem>
+                    <SelectItem value="last_3m_vs_year_ago">Compare last 3 months year over year</SelectItem>
+                    <SelectItem value="last_6m_vs_previous">Compare last 6 months to previous period</SelectItem>
+                    <SelectItem value="custom">Custom</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              
+              {/* Custom Date Ranges */}
+              {filters.comparisonPreset === 'custom' && (
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <Label className="text-sm text-gray-600">Primary Period</Label>
+                    <DateRangePicker
+                      dateRange={filters.dateRange}
+                      onDateRangeChange={(dateRange) => updateFilters({ dateRange })}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-sm text-gray-600">Comparison Period</Label>
+                    <DateRangePicker
+                      dateRange={filters.comparisonDateRange || getComparisonDateRange(filters.dateRange)}
+                      onDateRangeChange={(comparisonDateRange) => updateFilters({ comparisonDateRange })}
+                    />
+                  </div>
+                </div>
+              )}
+              
+              {/* Data Source Instructions */}
+              <div className="space-y-3 pt-2 border-t">
+                <Label className="text-sm font-medium">Data Source Instructions</Label>
+                
+                {/* GSC Instructions */}
+                {filters.sources.includes(SOURCES.GSC) && (
+                  <div className="p-3 bg-blue-50 dark:bg-blue-950/20 rounded-lg border border-blue-200 dark:border-blue-800">
+                    <div className="flex items-start space-x-2">
+                      <div className="w-2 h-2 rounded-full bg-blue-500 mt-2 flex-shrink-0"></div>
+                      <div className="text-sm">
+                        <div className="font-medium text-blue-900 dark:text-blue-100">Google Search Console</div>
+                        <div className="text-blue-700 dark:text-blue-300 mt-1">
+                          GSC data will be automatically fetched for both periods when you import data.
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+                
+                {/* Ahrefs Instructions */}
+                {filters.sources.includes(SOURCES.AHREFS) && (
+                  <div className="p-3 bg-orange-50 dark:bg-orange-950/20 rounded-lg border border-orange-200 dark:border-orange-800">
+                    <div className="flex items-start space-x-2">
+                      <div className="w-2 h-2 rounded-full bg-orange-500 mt-2 flex-shrink-0"></div>
+                      <div className="text-sm">
+                        <div className="font-medium text-orange-900 dark:text-orange-100">Ahrefs Export Required</div>
+                        <div className="text-orange-700 dark:text-orange-300 mt-1">
+                          Export your Ahrefs data with comparison enabled for the same period:
+                          <br />• <strong>Primary:</strong> {filters.dateRange.startDate} to {filters.dateRange.endDate}
+                          <br />• <strong>vs. Comparison:</strong> {filters.comparisonDateRange?.startDate} to {filters.comparisonDateRange?.endDate}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+              
+              {/* Show calculated ranges for presets */}
+              {filters.comparisonPreset !== 'custom' && (
+                <div className="text-xs text-gray-500 bg-gray-50 dark:bg-gray-800 p-3 rounded">
+                  <div><strong>Primary Period:</strong> {filters.dateRange.startDate} to {filters.dateRange.endDate}</div>
+                  <div><strong>Comparison Period:</strong> {filters.comparisonDateRange?.startDate} to {filters.comparisonDateRange?.endDate}</div>
+                </div>
+              )}
+            </div>
+          )}
         </CardContent>
       </Card>
 

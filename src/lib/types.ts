@@ -37,6 +37,31 @@ export const AhrefsMetricSchema = z.object({
   traffic: z.number().optional(),
 });
 
+// Ahrefs Comparison CSV Schema (for comparison exports)
+export const AhrefsComparisonMetricSchema = z.object({
+  keyword: z.string(),
+  currentUrl: z.string().optional(),
+  previousUrl: z.string().optional(),
+  currentPosition: z.number().optional(),
+  previousPosition: z.number().optional(),
+  positionChange: z.number().optional(),
+  currentTraffic: z.number().optional(),
+  previousTraffic: z.number().optional(),
+  trafficChange: z.number().optional(),
+  currentDate: z.string(),
+  previousDate: z.string(),
+  volume: z.number().optional(),
+  difficulty: z.number().optional(),
+  cpc: z.number().optional(),
+  // Intent classification (optional)
+  branded: z.boolean().optional(),
+  local: z.boolean().optional(),
+  navigational: z.boolean().optional(),
+  informational: z.boolean().optional(),
+  commercial: z.boolean().optional(),
+  transactional: z.boolean().optional(),
+});
+
 // Normalized Data Types (combining both sources)
 export const NormalizedMetricSchema = z.object({
   date: z.string(),
@@ -59,10 +84,24 @@ export const DateRangeSchema = z.object({
   endDate: z.string(),
 });
 
+export const ComparisonPresetSchema = z.enum([
+  'last_24h_vs_previous',
+  'last_24h_vs_week_ago', 
+  'last_7d_vs_previous',
+  'last_7d_vs_year_ago',
+  'last_28d_vs_previous',
+  'last_28d_vs_year_ago',
+  'last_3m_vs_previous',
+  'last_3m_vs_year_ago',
+  'last_6m_vs_previous',
+  'custom'
+]);
+
 export const FilterOptionsSchema = z.object({
   dateRange: DateRangeSchema,
   comparisonDateRange: DateRangeSchema.optional(),
   enableComparison: z.boolean().optional(),
+  comparisonPreset: ComparisonPresetSchema.optional(),
   metrics: z.array(z.enum(['clicks', 'impressions', 'ctr', 'position', 'volume', 'traffic'])),
   sources: z.array(z.enum(['gsc', 'ahrefs'])),
   queries: z.array(z.string()).optional(),
@@ -94,7 +133,9 @@ export const TableRowSchema = z.object({
 export type GSCMetric = z.infer<typeof GSCMetricSchema>;
 export type GSCResponse = z.infer<typeof GSCResponseSchema>;
 export type AhrefsMetric = z.infer<typeof AhrefsMetricSchema>;
+export type AhrefsComparisonMetric = z.infer<typeof AhrefsComparisonMetricSchema>;
 export type NormalizedMetric = z.infer<typeof NormalizedMetricSchema>;
+export type ComparisonPreset = z.infer<typeof ComparisonPresetSchema>;
 export type DateRange = z.infer<typeof DateRangeSchema>;
 export type FilterOptions = z.infer<typeof FilterOptionsSchema>;
 export type ChartDataPoint = z.infer<typeof ChartDataPointSchema>;

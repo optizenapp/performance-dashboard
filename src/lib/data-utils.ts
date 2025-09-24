@@ -1,4 +1,4 @@
-import { format, subDays, parseISO } from 'date-fns';
+import { format, subDays, subMonths, subYears, parseISO } from 'date-fns';
 import { 
   GSCMetric, 
   AhrefsMetric, 
@@ -292,6 +292,140 @@ export function getComparisonDateRange(
       startDate: comparisonStart.toISOString().split('T')[0],
       endDate: comparisonEnd.toISOString().split('T')[0],
     };
+  }
+}
+
+/**
+ * Get date ranges for comparison presets
+ */
+export function getComparisonPresetRanges(preset: string): {
+  primary: { startDate: string; endDate: string };
+  comparison: { startDate: string; endDate: string };
+} {
+  const today = new Date();
+  const endDate = format(today, 'yyyy-MM-dd');
+  
+  switch (preset) {
+    case 'last_24h_vs_previous': {
+      const primary = {
+        startDate: format(subDays(today, 1), 'yyyy-MM-dd'),
+        endDate,
+      };
+      const comparison = {
+        startDate: format(subDays(today, 2), 'yyyy-MM-dd'),
+        endDate: format(subDays(today, 1), 'yyyy-MM-dd'),
+      };
+      return { primary, comparison };
+    }
+    
+    case 'last_24h_vs_week_ago': {
+      const primary = {
+        startDate: format(subDays(today, 1), 'yyyy-MM-dd'),
+        endDate,
+      };
+      const comparison = {
+        startDate: format(subDays(today, 8), 'yyyy-MM-dd'),
+        endDate: format(subDays(today, 7), 'yyyy-MM-dd'),
+      };
+      return { primary, comparison };
+    }
+    
+    case 'last_7d_vs_previous': {
+      const primary = {
+        startDate: format(subDays(today, 7), 'yyyy-MM-dd'),
+        endDate,
+      };
+      const comparison = {
+        startDate: format(subDays(today, 14), 'yyyy-MM-dd'),
+        endDate: format(subDays(today, 7), 'yyyy-MM-dd'),
+      };
+      return { primary, comparison };
+    }
+    
+    case 'last_7d_vs_year_ago': {
+      const primary = {
+        startDate: format(subDays(today, 7), 'yyyy-MM-dd'),
+        endDate,
+      };
+      const comparison = {
+        startDate: format(subDays(subYears(today, 1), 7), 'yyyy-MM-dd'),
+        endDate: format(subYears(today, 1), 'yyyy-MM-dd'),
+      };
+      return { primary, comparison };
+    }
+    
+    case 'last_28d_vs_previous': {
+      const primary = {
+        startDate: format(subDays(today, 28), 'yyyy-MM-dd'),
+        endDate,
+      };
+      const comparison = {
+        startDate: format(subDays(today, 56), 'yyyy-MM-dd'),
+        endDate: format(subDays(today, 28), 'yyyy-MM-dd'),
+      };
+      return { primary, comparison };
+    }
+    
+    case 'last_28d_vs_year_ago': {
+      const primary = {
+        startDate: format(subDays(today, 28), 'yyyy-MM-dd'),
+        endDate,
+      };
+      const comparison = {
+        startDate: format(subDays(subYears(today, 1), 28), 'yyyy-MM-dd'),
+        endDate: format(subYears(today, 1), 'yyyy-MM-dd'),
+      };
+      return { primary, comparison };
+    }
+    
+    case 'last_3m_vs_previous': {
+      const primary = {
+        startDate: format(subMonths(today, 3), 'yyyy-MM-dd'),
+        endDate,
+      };
+      const comparison = {
+        startDate: format(subMonths(today, 6), 'yyyy-MM-dd'),
+        endDate: format(subMonths(today, 3), 'yyyy-MM-dd'),
+      };
+      return { primary, comparison };
+    }
+    
+    case 'last_3m_vs_year_ago': {
+      const primary = {
+        startDate: format(subMonths(today, 3), 'yyyy-MM-dd'),
+        endDate,
+      };
+      const comparison = {
+        startDate: format(subMonths(subYears(today, 1), 3), 'yyyy-MM-dd'),
+        endDate: format(subYears(today, 1), 'yyyy-MM-dd'),
+      };
+      return { primary, comparison };
+    }
+    
+    case 'last_6m_vs_previous': {
+      const primary = {
+        startDate: format(subMonths(today, 6), 'yyyy-MM-dd'),
+        endDate,
+      };
+      const comparison = {
+        startDate: format(subMonths(today, 12), 'yyyy-MM-dd'),
+        endDate: format(subMonths(today, 6), 'yyyy-MM-dd'),
+      };
+      return { primary, comparison };
+    }
+    
+    default: {
+      // Default to last 28 days vs previous
+      const primary = {
+        startDate: format(subDays(today, 28), 'yyyy-MM-dd'),
+        endDate,
+      };
+      const comparison = {
+        startDate: format(subDays(today, 56), 'yyyy-MM-dd'),
+        endDate: format(subDays(today, 28), 'yyyy-MM-dd'),
+      };
+      return { primary, comparison };
+    }
   }
 }
 
