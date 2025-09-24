@@ -82,7 +82,7 @@ export default function Dashboard() {
       const dateMatch = itemDate >= startDate && itemDate <= endDate;
       
       if (!dateMatch) {
-        if (data.indexOf(item) < 5) {
+        if (item.source === SOURCES.GSC && data.filter(d => d.source === SOURCES.GSC).indexOf(item) < 5) {
           console.log('❌ Date filter failed for item:', {
             itemDate: item.date,
             itemDateParsed: itemDate.toISOString(),
@@ -114,7 +114,7 @@ export default function Dashboard() {
       // Source filter
       const sourceMatch = filters.sources.includes(item.source);
       if (!sourceMatch) {
-        if (data.indexOf(item) < 5) {
+        if (item.source === SOURCES.GSC && data.filter(d => d.source === SOURCES.GSC).indexOf(item) < 5) {
           console.log('❌ Source filter failed for item:', {
             itemSource: item.source,
             allowedSources: filters.sources,
@@ -125,7 +125,7 @@ export default function Dashboard() {
       }
       
       // If we get here, all filters passed
-      if (data.indexOf(item) < 5) {
+      if (item.source === SOURCES.GSC && data.filter(d => d.source === SOURCES.GSC).indexOf(item) < 5) {
         console.log('✅ Item passed all filters:', {
           date: item.date,
           source: item.source,

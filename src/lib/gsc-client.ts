@@ -1,6 +1,5 @@
 import { google } from 'googleapis';
-import { GSCMetric, NormalizedMetric, SOURCES } from './types';
-import { normalizeGSCData } from './data-utils';
+import { GSCMetric } from './types';
 
 // Google Search Console API client
 export class GSCClient {
@@ -194,7 +193,7 @@ export class GSCClient {
         // This represents "data through this end date" which is more accurate for aggregated metrics.
         
         // Log the date assignment for the first row only
-        if (data.rows.indexOf(row) === 0) {
+        if (data.rows && data.rows.indexOf(row) === 0) {
           console.log('📅 GSC Date Assignment:', {
             originalRange: `${startDate} to ${endDate}`,
             assignedDate: endDate,
