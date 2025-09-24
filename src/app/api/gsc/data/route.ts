@@ -41,6 +41,15 @@ export async function POST(request: NextRequest) {
       );
     }
     
+    // Debug logging
+    console.log('GSC API Response:', {
+      timeSeries,
+      dimensions: dimensions || (timeSeries ? ['date'] : ['query', 'page']),
+      dataCount: data.length,
+      sampleData: data.slice(0, 3),
+      siteUrl
+    });
+    
     return NextResponse.json({ 
       success: true, 
       data,

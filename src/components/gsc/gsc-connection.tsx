@@ -59,6 +59,14 @@ export function GSCConnection({ onDataFetch, dateRange: initialDateRange }: GSCC
       // Time series data is mainly for charts and contains "Total" entries that we don't want in tables
       const aggregatedData = await fetchData(dateRange.startDate, dateRange.endDate, ['query', 'page'], false);
       
+      // Debug logging
+      console.log('GSC Frontend Data:', {
+        count: aggregatedData.length,
+        sampleData: aggregatedData.slice(0, 5),
+        dateRange,
+        dimensions: ['query', 'page']
+      });
+      
       if (onDataFetch) {
         onDataFetch(aggregatedData);
       }
