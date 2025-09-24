@@ -178,16 +178,19 @@ export function prepareChartData(
 /**
  * Convert normalized data to table rows
  */
-export function prepareTableData(data: NormalizedMetric[]): TableRow[] {
+export function prepareTableData(data: NormalizedMetric[], enableComparison = false): TableRow[] {
   const grouped = new Map<string, {
     clicks: number;
     impressions: number;
     ctr: number;
     position: number;
     volume: number;
+    traffic: number;
     url?: string;
-    source: string;
-    count: number;
+    sources: Set<string>;
+    ctrCount: number;
+    positionCount: number;
+    trafficChange?: number;
   }>();
 
   data.forEach(item => {
@@ -199,39 +202,68 @@ export function prepareTableData(data: NormalizedMetric[]): TableRow[] {
       ctr: 0,
       position: 0,
       volume: 0,
+      traffic: 0,
       url: item.url,
-      source: item.source,
-      count: 0,
+      sources: new Set<string>(),
+      ctrCount: 0,
+      positionCount: 0,
     };
+
+    // Track which sources have data for this query-URL combination
+    existing.sources.add(item.source);
 
     // Aggregate metrics
     existing.clicks += item.clicks || 0;
     existing.impressions += item.impressions || 0;
     existing.volume += item.volume || 0;
+    existing.traffic += item.traffic || 0;
     
     // Average for CTR and position (only if values exist)
-    if (item.ctr !== undefined) {
-      existing.ctr = (existing.ctr * existing.count + item.ctr) / (existing.count + 1);
+    if (item.ctr !== undefined && item.ctr > 0) {
+      existing.ctr = (existing.ctr * existing.ctrCount + item.ctr) / (existing.ctrCount + 1);
+      existing.ctrCount++;
     }
-    if (item.position !== undefined) {
-      existing.position = (existing.position * existing.count + item.position) / (existing.count + 1);
+    if (item.position !== undefined && item.position > 0) {
+      existing.position = (existing.position * existing.positionCount + item.position) / (existing.positionCount + 1);
+      existing.positionCount++;
+    }
+
+    // Calculate traffic change for Ahrefs comparison data
+    if (enableComparison && item.source === 'ahrefs') {
+      // Check if we have Ahrefs comparison data
+      const ahrefsData = item as any;
+      if (ahrefsData.trafficChange !== undefined) {
+        existing.trafficChange = ahrefsData.trafficChange;
+      }
     }
     
-    existing.count += 1;
     grouped.set(key, existing);
   });
 
-  return Array.from(grouped.entries()).map(([key, data]) => ({
-    query: key.split('|')[0], // Extract query from compound key
-    url: data.url,
-    clicks: data.clicks || undefined,
-    impressions: data.impressions || undefined,
-    ctr: data.ctr > 0 ? Math.round(data.ctr * 10000) / 100 : undefined, // Convert to percentage
-    position: data.position > 0 ? Math.round(data.position * 10) / 10 : undefined,
-    volume: data.volume || undefined,
-    source: data.source,
-    change: undefined, // TODO: Calculate change from previous period
-  })).sort((a, b) => (b.clicks || 0) - (a.clicks || 0));
+  return Array.from(grouped.entries()).map(([key, data]) => {
+    // Determine source display
+    const sourcesArray = Array.from(data.sources);
+    let sourceDisplay = '';
+    if (sourcesArray.length > 1) {
+      sourceDisplay = 'Both';
+    } else if (sourcesArray.includes('gsc')) {
+      sourceDisplay = 'GSC';
+    } else if (sourcesArray.includes('ahrefs')) {
+      sourceDisplay = 'Ahrefs';
+    }
+
+    return {
+      query: key.split('|')[0], // Extract query from compound key
+      url: data.url || undefined,
+      clicks: data.clicks > 0 ? data.clicks : undefined,
+      impressions: data.impressions > 0 ? data.impressions : undefined,
+      ctr: data.ctrCount > 0 ? Math.round(data.ctr * 10000) / 100 : undefined, // Convert to percentage
+      position: data.positionCount > 0 ? Math.round(data.position * 10) / 10 : undefined,
+      volume: data.volume > 0 ? data.volume : undefined,
+      source: sourceDisplay,
+      change: enableComparison && data.trafficChange !== undefined ? data.trafficChange : undefined,
+    };
+  }).sort((a, b) => (b.clicks || 0) - (a.clicks || 0));
 }
 
 /**

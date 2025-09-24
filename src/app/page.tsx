@@ -20,6 +20,13 @@ export default function Dashboard() {
   const [data, setData] = useState<NormalizedMetric[]>([]);
   const [loading, setLoading] = useState(false);
   const [selectedChartMetrics, setSelectedChartMetrics] = useState<string[]>(['clicks']);
+
+  // Remove 'volume' and 'traffic' from chart metrics if they exist (Ahrefs point-in-time data not suitable for time series)
+  useEffect(() => {
+    if (selectedChartMetrics.includes('volume') || selectedChartMetrics.includes('traffic')) {
+      setSelectedChartMetrics(prev => prev.filter(metric => metric !== 'volume' && metric !== 'traffic'));
+    }
+  }, [selectedChartMetrics]);
   const [filters, setFilters] = useState<FilterOptions>({
     dateRange: getDateRangePreset('last_30_days'),
     metrics: ['clicks', 'impressions', 'ctr', 'position'],
@@ -136,7 +143,7 @@ export default function Dashboard() {
     });
     return allChartData;
   }, [filteredData, selectedChartMetrics]);
-  const tableData = prepareTableData(filteredData);
+  const tableData = prepareTableData(filteredData, filters.enableComparison);
 
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -514,7 +521,7 @@ search console api,https://example.com/api-docs,12,500,25,3.20,80,2024-01-01,60,
             data={chartData}
             selectedMetrics={selectedChartMetrics}
             onMetricsChange={setSelectedChartMetrics}
-            availableMetrics={filters.metrics}
+            availableMetrics={filters.metrics.filter(metric => metric !== 'volume' && metric !== 'traffic')}
             showComparison={filters.sources.length > 1}
           />
 

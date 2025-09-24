@@ -45,13 +45,12 @@ export function DataTable({
   description = 'Detailed metrics for your queries and pages',
   loading = false,
   onExport,
-  maxRows = 50,
+  maxRows = Infinity,
 }: DataTableProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [sortField, setSortField] = useState<SortField>('clicks');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
   const [currentPage, setCurrentPage] = useState(1);
-  const rowsPerPage = 10;
 
   // Filter and sort data
   const processedData = useMemo(() => {
@@ -82,6 +81,9 @@ export function DataTable({
 
     return filtered.slice(0, maxRows);
   }, [data, searchTerm, sortField, sortDirection, maxRows]);
+
+  // Calculate rows per page (show all if maxRows is Infinity)
+  const rowsPerPage = maxRows === Infinity ? processedData.length : 10;
 
   // Pagination
   const totalPages = Math.ceil(processedData.length / rowsPerPage);
