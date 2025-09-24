@@ -13,6 +13,7 @@ import { FilterPanel } from '@/components/filters/filter-panel';
 import { PerformanceChart } from '@/components/charts/performance-chart';
 import { DataTable } from '@/components/tables/data-table';
 import { GSCConnection } from '@/components/gsc/gsc-connection';
+import { ComparisonSettings } from '@/components/data-sources/comparison-settings';
 
 export default function Dashboard() {
   const [data, setData] = useState<NormalizedMetric[]>([]);
@@ -203,6 +204,14 @@ search console api,/api-docs,12,500,25,3.20,80,2024-01-01`;
 
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Comparison Settings */}
+        <div className="mb-8">
+          <ComparisonSettings
+            filters={filters}
+            onFiltersChange={(updates) => setFilters(prev => ({ ...prev, ...updates }))}
+          />
+        </div>
+
         {/* Data Sources Section */}
         <div className="mb-8">
           <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
@@ -213,6 +222,11 @@ search console api,/api-docs,12,500,25,3.20,80,2024-01-01`;
             <GSCConnection 
               onDataFetch={handleGSCData}
               dateRange={filters.dateRange}
+              comparisonSettings={{
+                enabled: filters.enableComparison || false,
+                comparisonDateRange: filters.comparisonDateRange,
+                preset: filters.comparisonPreset,
+              }}
             />
 
             {/* Ahrefs CSV Upload */}
@@ -258,6 +272,21 @@ search console api,/api-docs,12,500,25,3.20,80,2024-01-01`;
                       Download Sample CSV Format
                     </Button>
                   </div>
+                  
+                  {/* Comparison Instructions for Ahrefs */}
+                  {filters.enableComparison && filters.comparisonDateRange && (
+                    <div className="p-3 bg-orange-50 dark:bg-orange-950/20 rounded-lg border border-orange-200 dark:border-orange-800">
+                      <div className="text-sm">
+                        <div className="font-medium text-orange-900 dark:text-orange-100 mb-2">⚠️ Comparison Export Required</div>
+                        <div className="text-orange-700 dark:text-orange-300 text-xs space-y-1">
+                          <div>Export your Ahrefs data with comparison enabled:</div>
+                          <div><strong>Primary:</strong> {filters.dateRange.startDate} to {filters.dateRange.endDate}</div>
+                          <div><strong>vs. Comparison:</strong> {filters.comparisonDateRange.startDate} to {filters.comparisonDateRange.endDate}</div>
+                          <div className="mt-2 text-orange-600">Expected comparison columns: Previous organic traffic, Current organic traffic, Organic traffic change, Previous position, Current position, Position change, etc.</div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                   
                   <div className="text-xs text-gray-500 space-y-1">
                     <div className="font-medium">Expected columns:</div>
