@@ -19,6 +19,7 @@ import { Button } from '@/components/ui/button';
 import { TrendingUp, BarChart3, LineChart as LineChartIcon } from 'lucide-react';
 import { ChartDataPoint, SectionFilters } from '@/lib/types';
 import { formatMetricValue } from '@/lib/data-utils';
+import { SectionFilterPanel } from '@/components/filters/section-filter-panel';
 import { format, parseISO } from 'date-fns';
 
 interface PerformanceChartProps {
@@ -30,6 +31,8 @@ interface PerformanceChartProps {
   availableMetrics: string[];
   height?: number;
   sectionFilters?: SectionFilters;
+  showSectionFilters?: boolean;
+  onSectionFiltersChange?: (filters: SectionFilters) => void;
 }
 
 const METRIC_COLORS = {
@@ -77,6 +80,8 @@ export function PerformanceChart({
   availableMetrics,
   height = 400,
   sectionFilters,
+  showSectionFilters = false,
+  onSectionFiltersChange,
 }: PerformanceChartProps) {
   const [chartType, setChartType] = useState<'line' | 'bar'>('line');
 
@@ -299,7 +304,20 @@ export function PerformanceChart({
           </div>
         </div>
       </CardHeader>
-      <CardContent>
+      <CardContent className="space-y-6">
+        {/* Section-specific filters */}
+        {showSectionFilters && sectionFilters && onSectionFiltersChange && (
+          <SectionFilterPanel
+            title="Chart Filters"
+            description="Control date range and comparison for charts"
+            icon={<BarChart3 className="h-4 w-4 text-blue-500" />}
+            filters={sectionFilters}
+            onFiltersChange={onSectionFiltersChange}
+            className="border border-blue-200 bg-blue-50/50 dark:border-blue-800 dark:bg-blue-900/20"
+          />
+        )}
+        
+        {/* Chart */}
         <ResponsiveContainer width="100%" height={height}>
           {renderChart()}
         </ResponsiveContainer>

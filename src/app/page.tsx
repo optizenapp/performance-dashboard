@@ -9,7 +9,6 @@ import { getDateRangePreset } from '@/lib/data-utils';
 import { SOURCES } from '@/lib/types';
 import { prepareChartData, prepareTableData, extractFilterOptions, normalizeAhrefsData } from '@/lib/data-utils';
 import { parseAhrefsCSV, validateCSVFile, readFileAsText } from '@/lib/csv-parser';
-import { FilterPanel } from '@/components/filters/filter-panel';
 import { SectionFilterPanel } from '@/components/filters/section-filter-panel';
 import { PerformanceChart } from '@/components/charts/performance-chart';
 import { DataTable } from '@/components/tables/data-table';
@@ -206,6 +205,29 @@ export default function Dashboard() {
 
   // Derived data
   const filterOptions = useMemo(() => extractFilterOptions(data), [data]); // Use all data for filter options
+
+  // Section-specific filtered data
+  const sectionFilteredData = useMemo(() => {
+    const filterDataBySection = (sectionFilters: SectionFilters) => {
+      const startDate = new Date(sectionFilters.dateRange.startDate);
+      const endDate = new Date(sectionFilters.dateRange.endDate);
+      
+      return data.filter(item => {
+        const itemDate = new Date(item.date);
+        const dateMatch = itemDate >= startDate && itemDate <= endDate;
+        
+        // Apply global source filter
+        const sourceMatch = filters.sources.includes(item.source);
+        
+        return dateMatch && sourceMatch;
+      });
+    };
+
+    return {
+      quickView: filterDataBySection(sectionFilters.quickView),
+      table: filterDataBySection(sectionFilters.table),
+    };
+  }, [data, sectionFilters, filters.sources]);
   // Prepare chart data for multiple metrics
   const chartData = useMemo(() => {
     const allChartData: ChartDataPoint[] = [];
@@ -216,7 +238,52 @@ export default function Dashboard() {
     });
     return allChartData;
   }, [data, selectedChartMetrics]);
-  const tableData = prepareTableData(filteredData, filters.enableComparison);
+
+  // Section-specific summary stats for Quick Overview
+  const quickViewStats = useMemo(() => {
+    const stats = {
+      totalClicks: 0,
+      totalImpressions: 0,
+      avgCTR: 0,
+      avgPosition: 0,
+      totalVolume: 0,
+      totalTraffic: 0,
+    };
+
+    if (sectionFilteredData.quickView.length === 0) {
+      return stats;
+    }
+
+    let positionSum = 0;
+    let positionCount = 0;
+    let ctrSum = 0;
+    let ctrCount = 0;
+
+    sectionFilteredData.quickView.forEach(item => {
+      stats.totalClicks += item.clicks || 0;
+      stats.totalImpressions += item.impressions || 0;
+      stats.totalVolume += item.volume || 0;
+      stats.totalTraffic += item.traffic || 0;
+
+      // Only use GSC data for position calculation (Average Position)
+      if (item.position && item.position > 0 && item.source === SOURCES.GSC) {
+        positionSum += item.position;
+        positionCount++;
+      }
+
+      if (item.ctr !== undefined && item.ctr !== null) {
+        ctrSum += item.ctr;
+        ctrCount++;
+      }
+    });
+
+    stats.avgPosition = positionCount > 0 ? positionSum / positionCount : 0;
+    stats.avgCTR = ctrCount > 0 ? ctrSum / ctrCount : 0;
+
+    return stats;
+  }, [sectionFilteredData.quickView]);
+
+  const tableData = prepareTableData(sectionFilteredData.table, sectionFilters.table.enableComparison);
   
   // Filter table data by source
   const filteredTableData = useMemo(() => {
@@ -527,26 +594,39 @@ search console api,https://example.com/api-docs,12,500,25,3.20,80,2024-01-01,60,
           </div>
         )}
 
-        {/* Filters and Controls */}
-        <div className="mb-8">
-          <FilterPanel
-            filters={filters}
-            onFiltersChange={setFilters}
-            availableQueries={filterOptions.queries}
-            availableUrls={filterOptions.urls}
-          />
-        </div>
-
-        {/* Quick Stats */}
-        <div className="mb-8">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
-              Quick Overview
-            </h2>
-            <div className="text-sm text-gray-600 dark:text-gray-400">
-              {new Date(filters.dateRange.startDate).toLocaleDateString()} - {new Date(filters.dateRange.endDate).toLocaleDateString()}
+        {/* Quick Overview */}
+        <Card className="mb-8">
+          <CardHeader>
+            <CardTitle className="flex items-center space-x-2">
+              <TrendingUp className="h-5 w-5" />
+              <span>Quick Overview</span>
+            </CardTitle>
+            <CardDescription>
+              Key performance metrics with independent date range and comparison controls
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            {/* Quick Overview-specific filters */}
+            <SectionFilterPanel
+              title="Overview Filters"
+              description="Control date range and comparison for overview cards"
+              icon={<TrendingUp className="h-4 w-4 text-green-500" />}
+              filters={sectionFilters.quickView}
+              onFiltersChange={(newFilters) => 
+                setSectionFilters(prev => ({ ...prev, quickView: newFilters }))
+              }
+              className="border border-green-200 bg-green-50/50 dark:border-green-800 dark:bg-green-900/20"
+            />
+            
+            {/* Overview date range display */}
+            <div className="flex items-center justify-between text-sm text-gray-600 dark:text-gray-400">
+              <span>Showing data for:</span>
+              <span>
+                {new Date(sectionFilters.quickView.dateRange.startDate).toLocaleDateString()} - {new Date(sectionFilters.quickView.dateRange.endDate).toLocaleDateString()}
+              </span>
             </div>
-          </div>
+            
+            {/* Overview cards */}
           <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -555,10 +635,10 @@ search console api,https://example.com/api-docs,12,500,25,3.20,80,2024-01-01,60,
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold">
-                  {summaryStats.totalClicks.toLocaleString()}
+                  {quickViewStats.totalClicks.toLocaleString()}
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  From {filteredData.length} data points
+                  From {sectionFilteredData.quickView.length} data points
                 </p>
               </CardContent>
             </Card>
@@ -570,7 +650,7 @@ search console api,https://example.com/api-docs,12,500,25,3.20,80,2024-01-01,60,
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold">
-                  {summaryStats.totalImpressions.toLocaleString()}
+                  {quickViewStats.totalImpressions.toLocaleString()}
                 </div>
                 <p className="text-xs text-muted-foreground">
                   From GSC & Ahrefs data
@@ -585,7 +665,7 @@ search console api,https://example.com/api-docs,12,500,25,3.20,80,2024-01-01,60,
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold">
-                  {(summaryStats.avgCTR * 100).toFixed(1)}%
+                  {(quickViewStats.avgCTR * 100).toFixed(1)}%
                 </div>
                 <p className="text-xs text-muted-foreground">
                   Click-through rate
@@ -600,7 +680,7 @@ search console api,https://example.com/api-docs,12,500,25,3.20,80,2024-01-01,60,
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold">
-                  {summaryStats.avgPosition > 0 ? summaryStats.avgPosition.toFixed(1) : 'N/A'}
+                  {quickViewStats.avgPosition > 0 ? quickViewStats.avgPosition.toFixed(1) : 'N/A'}
                 </div>
                 <p className="text-xs text-muted-foreground">
                   Average ranking position
@@ -608,53 +688,37 @@ search console api,https://example.com/api-docs,12,500,25,3.20,80,2024-01-01,60,
               </CardContent>
             </Card>
           </div>
-        </div>
+          </CardContent>
+        </Card>
 
         {/* Charts and Tables */}
         <div className="space-y-8">
-          {/* Chart Section with Independent Filters */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center space-x-2">
-                <BarChart3 className="h-5 w-5" />
-                <span>Performance Charts</span>
-              </CardTitle>
-              <CardDescription>
-                Visualize your metrics over time with independent date range and comparison controls
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              {/* Chart-specific filters */}
-              <SectionFilterPanel
-                title="Chart Filters"
-                description="Control date range and comparison for charts"
-                icon={<BarChart3 className="h-4 w-4 text-blue-500" />}
-                filters={sectionFilters.chart}
-                onFiltersChange={(newFilters) => 
-                  setSectionFilters(prev => ({ ...prev, chart: newFilters }))
-                }
-                className="border border-blue-200 bg-blue-50/50 dark:border-blue-800 dark:bg-blue-900/20"
-              />
-              
-              {/* Chart component */}
-              <PerformanceChart
-                data={chartData}
-                selectedMetrics={selectedChartMetrics}
-                onMetricsChange={setSelectedChartMetrics}
-                availableMetrics={filters.metrics.filter(metric => metric !== 'volume' && metric !== 'traffic')}
-                sectionFilters={sectionFilters.chart}
-              />
-            </CardContent>
-          </Card>
+          {/* Performance Charts */}
+          <PerformanceChart
+            data={chartData}
+            selectedMetrics={selectedChartMetrics}
+            onMetricsChange={setSelectedChartMetrics}
+            availableMetrics={filters.metrics.filter(metric => metric !== 'volume' && metric !== 'traffic')}
+            sectionFilters={sectionFilters.chart}
+            title="Performance Charts"
+            description="Visualize your metrics over time"
+            showSectionFilters={true}
+            onSectionFiltersChange={(newFilters) => 
+              setSectionFilters(prev => ({ ...prev, chart: newFilters }))
+            }
+          />
 
           {/* Performance Data Table */}
           <Card>
             <CardHeader>
               <div className="flex items-center justify-between">
                 <div>
-                  <CardTitle>Performance Data</CardTitle>
+                  <CardTitle className="flex items-center space-x-2">
+                    <BarChart3 className="h-5 w-5" />
+                    <span>Performance Data</span>
+                  </CardTitle>
                   <CardDescription>
-                    Detailed metrics for your queries and pages
+                    Detailed metrics for your queries and pages with independent filtering
                   </CardDescription>
                 </div>
                 <div className="flex items-center space-x-4">
@@ -679,15 +743,36 @@ search console api,https://example.com/api-docs,12,500,25,3.20,80,2024-01-01,60,
                 </div>
               </div>
             </CardHeader>
-            <CardContent>
-              {filters.enableComparison ? (
+            <CardContent className="space-y-6">
+              {/* Table-specific filters */}
+              <SectionFilterPanel
+                title="Table Filters"
+                description="Control date range and comparison for table data"
+                icon={<BarChart3 className="h-4 w-4 text-purple-500" />}
+                filters={sectionFilters.table}
+                onFiltersChange={(newFilters) => 
+                  setSectionFilters(prev => ({ ...prev, table: newFilters }))
+                }
+                className="border border-purple-200 bg-purple-50/50 dark:border-purple-800 dark:bg-purple-900/20"
+              />
+              
+              {/* Table date range display */}
+              <div className="flex items-center justify-between text-sm text-gray-600 dark:text-gray-400">
+                <span>Table showing data for:</span>
+                <span>
+                  {new Date(sectionFilters.table.dateRange.startDate).toLocaleDateString()} - {new Date(sectionFilters.table.dateRange.endDate).toLocaleDateString()}
+                </span>
+              </div>
+              
+              {/* Table content */}
+              {sectionFilters.table.enableComparison ? (
                 <ComparisonDataTable
                   data={filteredTableData}
                   loading={loading}
                   title=""
                   description=""
-                  comparisonStartDate={filters.comparisonDateRange?.startDate || filters.dateRange.startDate}
-                  comparisonEndDate={filters.comparisonDateRange?.endDate || filters.dateRange.endDate}
+                  comparisonStartDate={sectionFilters.table.comparisonDateRange?.startDate || sectionFilters.table.dateRange.startDate}
+                  comparisonEndDate={sectionFilters.table.comparisonDateRange?.endDate || sectionFilters.table.dateRange.endDate}
                 />
               ) : (
                 <DataTable
