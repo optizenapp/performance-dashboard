@@ -241,6 +241,13 @@ export default function Dashboard() {
 
   // Section-specific summary stats for Quick Overview
   const quickViewStats = useMemo(() => {
+    console.log('🔍 Calculating Quick Overview stats for date range:', {
+      startDate: sectionFilters.quickView.dateRange.startDate,
+      endDate: sectionFilters.quickView.dateRange.endDate,
+      dataPoints: sectionFilteredData.quickView.length,
+      sampleData: sectionFilteredData.quickView.slice(0, 3)
+    });
+
     const stats = {
       totalClicks: 0,
       totalImpressions: 0,
@@ -251,13 +258,12 @@ export default function Dashboard() {
     };
 
     if (sectionFilteredData.quickView.length === 0) {
+      console.log('⚠️ No Quick Overview data for selected date range');
       return stats;
     }
 
     let positionSum = 0;
     let positionCount = 0;
-    let ctrSum = 0;
-    let ctrCount = 0;
 
     sectionFilteredData.quickView.forEach(item => {
       stats.totalClicks += item.clicks || 0;
@@ -270,18 +276,25 @@ export default function Dashboard() {
         positionSum += item.position;
         positionCount++;
       }
-
-      if (item.ctr !== undefined && item.ctr !== null) {
-        ctrSum += item.ctr;
-        ctrCount++;
-      }
     });
 
+    // Calculate average position from filtered data
     stats.avgPosition = positionCount > 0 ? positionSum / positionCount : 0;
-    stats.avgCTR = ctrCount > 0 ? ctrSum / ctrCount : 0;
+    
+    // Calculate CTR from filtered data: CTR = Total Clicks / Total Impressions
+    stats.avgCTR = stats.totalImpressions > 0 ? stats.totalClicks / stats.totalImpressions : 0;
+
+    console.log('📊 Quick Overview calculated stats:', {
+      totalClicks: stats.totalClicks,
+      totalImpressions: stats.totalImpressions,
+      calculatedCTR: stats.avgCTR,
+      calculatedCTRPercent: (stats.avgCTR * 100).toFixed(2) + '%',
+      avgPosition: stats.avgPosition.toFixed(2),
+      positionDataPoints: positionCount
+    });
 
     return stats;
-  }, [sectionFilteredData.quickView]);
+  }, [sectionFilteredData.quickView, sectionFilters.quickView.dateRange]);
 
   const tableData = prepareTableData(sectionFilteredData.table, sectionFilters.table.enableComparison);
   
