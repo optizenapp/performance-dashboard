@@ -5,11 +5,13 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
-import { METRICS } from '@/lib/types';
+import { METRICS, SOURCES } from '@/lib/types';
 
 interface MetricSelectorProps {
   selectedMetrics: string[];
   onMetricsChange: (metrics: string[]) => void;
+  selectedSources: string[];
+  onSourcesChange: (sources: string[]) => void;
   availableMetrics?: string[];
   className?: string;
 }
@@ -27,7 +29,7 @@ const METRIC_DESCRIPTIONS = {
   [METRICS.CLICKS]: 'Number of clicks from search results',
   [METRICS.IMPRESSIONS]: 'Number of times your pages appeared in search',
   [METRICS.CTR]: 'Click-through rate percentage',
-  [METRICS.POSITION]: 'Average ranking position',
+  [METRICS.POSITION]: 'Average ranking position from GSC',
   [METRICS.VOLUME]: 'Monthly search volume for keywords',
   [METRICS.TRAFFIC]: 'Estimated organic traffic',
 } as const;
@@ -43,7 +45,9 @@ const METRIC_COLORS = {
 
 export function MetricSelector({ 
   selectedMetrics, 
-  onMetricsChange, 
+  onMetricsChange,
+  selectedSources,
+  onSourcesChange,
   availableMetrics = Object.values(METRICS),
   className 
 }: MetricSelectorProps) {
@@ -99,6 +103,45 @@ export function MetricSelector({
       </CardHeader>
       <CardContent>
         <div className="space-y-4">
+          {/* Data Source Selection */}
+          <div className="space-y-3">
+            <div className="text-sm font-medium text-gray-700 dark:text-gray-300">
+              Data Sources
+            </div>
+            <div className="flex space-x-4">
+              <label className="flex items-center space-x-2 cursor-pointer">
+                <input
+                  type="radio"
+                  name="dataSource"
+                  checked={selectedSources.length === 2}
+                  onChange={() => onSourcesChange([SOURCES.GSC, SOURCES.AHREFS])}
+                  className="w-4 h-4 text-blue-600"
+                />
+                <span className="text-sm">Both Sources</span>
+              </label>
+              <label className="flex items-center space-x-2 cursor-pointer">
+                <input
+                  type="radio"
+                  name="dataSource"
+                  checked={selectedSources.length === 1 && selectedSources.includes(SOURCES.GSC)}
+                  onChange={() => onSourcesChange([SOURCES.GSC])}
+                  className="w-4 h-4 text-blue-600"
+                />
+                <span className="text-sm">GSC Only</span>
+              </label>
+              <label className="flex items-center space-x-2 cursor-pointer">
+                <input
+                  type="radio"
+                  name="dataSource"
+                  checked={selectedSources.length === 1 && selectedSources.includes(SOURCES.AHREFS)}
+                  onChange={() => onSourcesChange([SOURCES.AHREFS])}
+                  className="w-4 h-4 text-orange-600"
+                />
+                <span className="text-sm">Ahrefs Only</span>
+              </label>
+            </div>
+          </div>
+
           {/* Selected Metrics Summary */}
           {selectedMetrics.length > 0 && (
             <div className="flex flex-wrap gap-2 p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">

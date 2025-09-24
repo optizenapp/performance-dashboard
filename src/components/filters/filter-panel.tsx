@@ -10,7 +10,8 @@ import { Badge } from '@/components/ui/badge';
 import { X, Filter, RotateCcw } from 'lucide-react';
 import { DateRangePicker } from './date-range-picker';
 import { MetricSelector } from './metric-selector';
-import { FilterOptions, SOURCES } from '@/lib/types';
+import { FilterOptions, SOURCES, ComparisonPreset } from '@/lib/types';
+import { getComparisonPresetRanges } from '@/lib/data-utils';
 import { cn } from '@/lib/utils';
 
 interface FilterPanelProps {
@@ -66,14 +67,6 @@ export function FilterPanel({
     });
   };
 
-  const toggleSource = (source: string) => {
-    const newSources = filters.sources.includes(source as 'gsc' | 'ahrefs')
-      ? filters.sources.filter(s => s !== source)
-      : [...filters.sources, source as 'gsc' | 'ahrefs'];
-    
-    updateFilters({ sources: newSources });
-  };
-
   const resetFilters = () => {
     onFiltersChange({
       dateRange: filters.dateRange, // Keep date range
@@ -94,8 +87,7 @@ export function FilterPanel({
 
   const hasActiveFilters = 
     (filters.queries && filters.queries.length > 0) ||
-    (filters.urls && filters.urls.length > 0) ||
-    filters.sources.length < 2;
+    (filters.urls && filters.urls.length > 0);
 
   return (
     <div className={cn('space-y-6', className)}>
@@ -144,59 +136,97 @@ export function FilterPanel({
         </CardContent>
       </Card>
 
-      {/* Data Sources */}
+      {/* Comparison Settings */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Data Sources</CardTitle>
+          <CardTitle className="text-base">Comparison</CardTitle>
           <CardDescription>
-            Select which data sources to include in your analysis
+            Compare your data against previous periods
           </CardDescription>
         </CardHeader>
-        <CardContent>
-          <div className="flex space-x-4">
-            <div
-              className={cn(
-                'flex items-center space-x-2 p-3 rounded-lg border-2 cursor-pointer transition-all',
-                filters.sources.includes(SOURCES.GSC)
-                  ? 'border-blue-500 bg-blue-50 dark:bg-blue-950'
-                  : 'border-gray-200 dark:border-gray-700'
-              )}
-              onClick={() => toggleSource(SOURCES.GSC)}
-            >
-              <div
-                className={cn(
-                  'w-3 h-3 rounded-full',
-                  filters.sources.includes(SOURCES.GSC) ? 'bg-blue-500' : 'bg-gray-300'
-                )}
-              />
-              <span className="font-medium">Google Search Console</span>
-            </div>
-            <div
-              className={cn(
-                'flex items-center space-x-2 p-3 rounded-lg border-2 cursor-pointer transition-all',
-                filters.sources.includes(SOURCES.AHREFS)
-                  ? 'border-orange-500 bg-orange-50 dark:bg-orange-950'
-                  : 'border-gray-200 dark:border-gray-700'
-              )}
-              onClick={() => toggleSource(SOURCES.AHREFS)}
-            >
-              <div
-                className={cn(
-                  'w-3 h-3 rounded-full',
-                  filters.sources.includes(SOURCES.AHREFS) ? 'bg-orange-500' : 'bg-gray-300'
-                )}
-              />
-              <span className="font-medium">Ahrefs</span>
-            </div>
+        <CardContent className="space-y-4">
+          {/* Enable Comparison Toggle */}
+          <div className="flex items-center justify-between">
+            <Label htmlFor="enable-comparison">Enable Comparison</Label>
+            <input
+              id="enable-comparison"
+              type="checkbox"
+              checked={filters.enableComparison || false}
+              onChange={(e) => updateFilters({ enableComparison: e.target.checked })}
+              className="h-4 w-4"
+            />
           </div>
+
+          {filters.enableComparison && (
+            <div className="space-y-4">
+              {/* Comparison Presets */}
+              <div className="space-y-2">
+                <Label>Comparison Period</Label>
+                <div className="grid grid-cols-1 gap-2">
+                  {[
+                    { value: 'last_24h_vs_previous', label: 'Last 24h vs Previous Period' },
+                    { value: 'last_7d_vs_previous', label: 'Last 7 days vs Previous Period' },
+                    { value: 'last_7d_vs_year_ago', label: 'Last 7 days vs Year Ago' },
+                    { value: 'last_28d_vs_previous', label: 'Last 28 days vs Previous Period' },
+                    { value: 'last_28d_vs_year_ago', label: 'Last 28 days vs Year Ago' },
+                    { value: 'custom', label: 'Custom Date Range' },
+                  ].map((preset) => (
+                    <label key={preset.value} className="flex items-center space-x-2 cursor-pointer">
+                      <input
+                        type="radio"
+                        name="comparison-preset"
+                        value={preset.value}
+                        checked={filters.comparisonPreset === preset.value}
+                        onChange={(e) => {
+                          const value = e.target.value as ComparisonPreset;
+                          updateFilters({ comparisonPreset: value });
+                          
+                          if (value !== 'custom') {
+                            const ranges = getComparisonPresetRanges(value);
+                            updateFilters({ 
+                              comparisonDateRange: ranges.comparison,
+                              dateRange: ranges.primary 
+                            });
+                          }
+                        }}
+                        className="w-4 h-4"
+                      />
+                      <span className="text-sm">{preset.label}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              {/* Custom Date Range */}
+              {filters.comparisonPreset === 'custom' && (
+                <div className="space-y-3">
+                  <div>
+                    <Label className="text-sm font-medium">Primary Period</Label>
+                    <DateRangePicker
+                      dateRange={filters.dateRange}
+                      onDateRangeChange={(dateRange) => updateFilters({ dateRange })}
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-sm font-medium">Comparison Period</Label>
+                    <DateRangePicker
+                      dateRange={filters.comparisonDateRange || filters.dateRange}
+                      onDateRangeChange={(comparisonDateRange) => updateFilters({ comparisonDateRange })}
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
         </CardContent>
       </Card>
-
 
       {/* Metrics Selector */}
       <MetricSelector
         selectedMetrics={filters.metrics}
         onMetricsChange={(metrics) => updateFilters({ metrics: metrics as ('clicks' | 'impressions' | 'ctr' | 'position' | 'volume' | 'traffic')[] })}
+        selectedSources={filters.sources}
+        onSourcesChange={(sources) => updateFilters({ sources: sources as ('gsc' | 'ahrefs')[] })}
       />
 
       {/* Advanced Filters - Only show when expanded */}

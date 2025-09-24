@@ -14,7 +14,7 @@ import {
   Bar,
 } from 'recharts';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+// import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
 import { TrendingUp, BarChart3, LineChart as LineChartIcon } from 'lucide-react';
 import { ChartDataPoint } from '@/lib/types';
@@ -25,8 +25,8 @@ interface PerformanceChartProps {
   data: ChartDataPoint[];
   title?: string;
   description?: string;
-  selectedMetric: string;
-  onMetricChange: (metric: string) => void;
+  selectedMetrics: string[];
+  onMetricsChange: (metrics: string[]) => void;
   availableMetrics: string[];
   height?: number;
   showComparison?: boolean;
@@ -46,31 +46,60 @@ const METRIC_COLORS = {
 //   BAR: 'bar',
 // } as const;
 
+const METRIC_LABELS = {
+  clicks: 'Clicks',
+  impressions: 'Impressions',
+  ctr: 'CTR (%)',
+  position: 'Avg. Position',
+  volume: 'Search Volume',
+  traffic: 'Traffic',
+} as const;
+
+const METRIC_BG_COLORS = {
+  clicks: 'bg-blue-600',
+  impressions: 'bg-green-600',
+  ctr: 'bg-purple-600',
+  position: 'bg-orange-600',
+  volume: 'bg-pink-600',
+  traffic: 'bg-indigo-600',
+} as const;
+
+const getMetricColorClass = (metric: string): string => {
+  return METRIC_BG_COLORS[metric as keyof typeof METRIC_BG_COLORS] || 'bg-gray-600';
+};
+
 export function PerformanceChart({
   data,
   title = 'Performance Trends',
   description = 'Track your metrics over time',
-  selectedMetric,
-  onMetricChange,
+  selectedMetrics,
+  onMetricsChange,
   availableMetrics,
   height = 400,
-  showComparison = false,
+  // showComparison = false, // Unused in multi-metric mode
 }: PerformanceChartProps) {
   const [chartType, setChartType] = useState<'line' | 'bar'>('line');
 
+  const toggleMetric = (metric: string) => {
+    if (selectedMetrics.includes(metric)) {
+      onMetricsChange(selectedMetrics.filter(m => m !== metric));
+    } else {
+      onMetricsChange([...selectedMetrics, metric]);
+    }
+  };
+
   // Process data for the chart
   const chartData = useMemo(() => {
-    // Group data by date and aggregate by source if showing comparison
+    // Group data by date
     const grouped = new Map<string, {
       date: string;
       formattedDate: string;
-      value?: number;
-      gsc?: number;
-      ahrefs?: number;
+      [key: string]: string | number | undefined;
     }>();
 
     data.forEach(point => {
-      if (point.metric !== selectedMetric) return;
+      // Only include data for selected metrics
+      if (!selectedMetrics.includes(point.metric)) return;
 
       const key = point.date;
       if (!grouped.has(key)) {
@@ -81,21 +110,16 @@ export function PerformanceChart({
       }
 
       const entry = grouped.get(key)!;
-      if (showComparison && point.source) {
-        if (point.source === 'gsc') {
-          entry.gsc = point.value;
-        } else if (point.source === 'ahrefs') {
-          entry.ahrefs = point.value;
-        }
-      } else {
-        entry.value = (entry.value || 0) + point.value;
-      }
+      const metricKey = point.metric;
+      
+      // Aggregate values for each metric
+      entry[metricKey] = (entry[metricKey] as number || 0) + point.value;
     });
 
     return Array.from(grouped.values()).sort((a, b) => 
       new Date(a.date).getTime() - new Date(b.date).getTime()
     );
-  }, [data, selectedMetric, showComparison]);
+  }, [data, selectedMetrics]);
 
   // Custom tooltip formatter
   const CustomTooltip = ({ active, payload, label }: {
@@ -109,8 +133,8 @@ export function PerformanceChart({
           <p className="font-medium">{label}</p>
           {payload.map((entry, index: number) => (
             <p key={index} style={{ color: entry.color }}>
-              {entry.dataKey === 'value' ? selectedMetric : entry.dataKey}: {' '}
-              {formatMetricValue(entry.value, selectedMetric)}
+              {METRIC_LABELS[entry.dataKey as keyof typeof METRIC_LABELS] || entry.dataKey}: {' '}
+              {formatMetricValue(entry.value, entry.dataKey)}
             </p>
           ))}
         </div>
@@ -119,23 +143,25 @@ export function PerformanceChart({
     return null;
   };
 
-  // Calculate trend
+  // Calculate trend for the first selected metric
   const trend = useMemo(() => {
-    if (chartData.length < 2) return null;
+    if (chartData.length < 2 || selectedMetrics.length === 0) return null;
     
-    const firstValue = showComparison 
-      ? chartData[0].gsc || chartData[0].ahrefs || 0
-      : chartData[0].value || 0;
-    const lastValue = showComparison
-      ? chartData[chartData.length - 1].gsc || chartData[chartData.length - 1].ahrefs || 0
-      : chartData[chartData.length - 1].value || 0;
+    // Group data by date to get trend for first metric
+    const metricData = chartData.filter(point => point.metric === selectedMetrics[0]);
+    if (metricData.length < 2) return null;
+    
+    const firstValue = Number(metricData[0].value) || 0;
+    const lastValue = Number(metricData[metricData.length - 1].value) || 0;
+    
+    if (firstValue === 0) return null;
     
     const change = ((lastValue - firstValue) / firstValue) * 100;
     return {
       percentage: Math.abs(change).toFixed(1),
       direction: change >= 0 ? 'up' : 'down',
     };
-  }, [chartData, showComparison]);
+  }, [chartData, selectedMetrics]);
 
   const renderChart = () => {
     const commonProps = {
@@ -155,32 +181,18 @@ export function PerformanceChart({
           <YAxis 
             className="text-xs"
             tick={{ fontSize: 12 }}
-            tickFormatter={(value) => formatMetricValue(value, selectedMetric)}
           />
           <Tooltip content={<CustomTooltip />} />
-          {showComparison ? (
-            <>
-              <Bar 
-                dataKey="gsc" 
-                fill={METRIC_COLORS.clicks} 
-                name="Google Search Console"
-                radius={[2, 2, 0, 0]}
-              />
-              <Bar 
-                dataKey="ahrefs" 
-                fill={METRIC_COLORS.volume} 
-                name="Ahrefs"
-                radius={[2, 2, 0, 0]}
-              />
-              <Legend />
-            </>
-          ) : (
+          {selectedMetrics.map(metric => (
             <Bar 
-              dataKey="value" 
-              fill={METRIC_COLORS[selectedMetric as keyof typeof METRIC_COLORS] || '#3b82f6'}
+              key={metric}
+              dataKey={metric}
+              fill={METRIC_COLORS[metric as keyof typeof METRIC_COLORS] || '#3b82f6'}
+              name={METRIC_LABELS[metric as keyof typeof METRIC_LABELS] || metric}
               radius={[2, 2, 0, 0]}
             />
-          )}
+          ))}
+          {selectedMetrics.length > 1 && <Legend />}
         </BarChart>
       );
     }
@@ -196,38 +208,20 @@ export function PerformanceChart({
         <YAxis 
           className="text-xs"
           tick={{ fontSize: 12 }}
-          tickFormatter={(value) => formatMetricValue(value, selectedMetric)}
         />
         <Tooltip content={<CustomTooltip />} />
-        {showComparison ? (
-          <>
-            <Line 
-              type="monotone" 
-              dataKey="gsc" 
-              stroke={METRIC_COLORS.clicks}
-              strokeWidth={2}
-              dot={{ r: 4 }}
-              name="Google Search Console"
-            />
-            <Line 
-              type="monotone" 
-              dataKey="ahrefs" 
-              stroke={METRIC_COLORS.volume}
-              strokeWidth={2}
-              dot={{ r: 4 }}
-              name="Ahrefs"
-            />
-            <Legend />
-          </>
-        ) : (
+        {selectedMetrics.map(metric => (
           <Line 
+            key={metric}
             type="monotone" 
-            dataKey="value" 
-            stroke={METRIC_COLORS[selectedMetric as keyof typeof METRIC_COLORS] || '#3b82f6'}
+            dataKey={metric}
+            stroke={METRIC_COLORS[metric as keyof typeof METRIC_COLORS] || '#3b82f6'}
             strokeWidth={2}
             dot={{ r: 4 }}
+            name={METRIC_LABELS[metric as keyof typeof METRIC_LABELS] || metric}
           />
-        )}
+        ))}
+        {selectedMetrics.length > 1 && <Legend />}
       </LineChart>
     );
   };
@@ -256,18 +250,24 @@ export function PerformanceChart({
         </div>
         
         <div className="flex items-center space-x-4 mt-4">
-          <Select value={selectedMetric} onValueChange={onMetricChange}>
-            <SelectTrigger className="w-[180px]">
-              <SelectValue placeholder="Select metric" />
-            </SelectTrigger>
-            <SelectContent>
-              {availableMetrics.map(metric => (
-                <SelectItem key={metric} value={metric}>
-                  {metric.charAt(0).toUpperCase() + metric.slice(1)}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          {/* Metric Toggle Buttons */}
+          <div className="flex flex-wrap gap-2">
+            {availableMetrics.map(metric => {
+              const isSelected = selectedMetrics.includes(metric);
+              const colorClass = getMetricColorClass(metric);
+              return (
+                <Button
+                  key={metric}
+                  variant={isSelected ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => toggleMetric(metric)}
+                  className={isSelected ? `${colorClass} text-white border-0` : 'hover:bg-gray-50'}
+                >
+                  {METRIC_LABELS[metric as keyof typeof METRIC_LABELS] || metric}
+                </Button>
+              );
+            })}
+          </div>
 
           <div className="flex space-x-2">
             <Button

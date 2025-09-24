@@ -22,7 +22,7 @@ export function normalizeGSCData(gscData: GSCMetric[]): NormalizedMetric[] {
     clicks: item.clicks,
     impressions: item.impressions,
     ctr: item.ctr,
-    position: item.position,
+    position: item.position, // Average position from GSC
     volume: undefined,
     difficulty: undefined,
     cpc: undefined,
@@ -42,7 +42,7 @@ export function normalizeAhrefsData(ahrefsData: AhrefsMetric[]): NormalizedMetri
     clicks: undefined,
     impressions: undefined,
     ctr: undefined,
-    position: item.position,
+    position: undefined, // Position data comes from GSC
     volume: item.volume,
     difficulty: item.difficulty,
     cpc: item.cpc,
@@ -191,7 +191,8 @@ export function prepareTableData(data: NormalizedMetric[]): TableRow[] {
   }>();
 
   data.forEach(item => {
-    const key = item.query;
+    // Group by query and URL to avoid over-aggregation
+    const key = `${item.query}|${item.url || 'no-url'}`;
     const existing = grouped.get(key) || {
       clicks: 0,
       impressions: 0,
@@ -208,21 +209,25 @@ export function prepareTableData(data: NormalizedMetric[]): TableRow[] {
     existing.impressions += item.impressions || 0;
     existing.volume += item.volume || 0;
     
-    // Average for CTR and position
-    existing.ctr = (existing.ctr * existing.count + (item.ctr || 0)) / (existing.count + 1);
-    existing.position = (existing.position * existing.count + item.position) / (existing.count + 1);
+    // Average for CTR and position (only if values exist)
+    if (item.ctr !== undefined) {
+      existing.ctr = (existing.ctr * existing.count + item.ctr) / (existing.count + 1);
+    }
+    if (item.position !== undefined) {
+      existing.position = (existing.position * existing.count + item.position) / (existing.count + 1);
+    }
     
     existing.count += 1;
     grouped.set(key, existing);
   });
 
-  return Array.from(grouped.entries()).map(([query, data]) => ({
-    query,
+  return Array.from(grouped.entries()).map(([key, data]) => ({
+    query: key.split('|')[0], // Extract query from compound key
     url: data.url,
     clicks: data.clicks || undefined,
     impressions: data.impressions || undefined,
-    ctr: Math.round(data.ctr * 10000) / 100, // Convert to percentage
-    position: Math.round(data.position * 10) / 10,
+    ctr: data.ctr > 0 ? Math.round(data.ctr * 10000) / 100 : undefined, // Convert to percentage
+    position: data.position > 0 ? Math.round(data.position * 10) / 10 : undefined,
     volume: data.volume || undefined,
     source: data.source,
     change: undefined, // TODO: Calculate change from previous period

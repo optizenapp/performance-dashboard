@@ -308,11 +308,11 @@ export function DataTable({
                   <TableCell>
                     <span className={cn(
                       'font-medium',
-                      row.position <= 3 ? 'text-green-600' :
-                      row.position <= 10 ? 'text-yellow-600' :
+                      row.position && row.position <= 3 ? 'text-green-600' :
+                      row.position && row.position <= 10 ? 'text-yellow-600' :
                       'text-red-600'
                     )}>
-                      {formatMetricValue(row.position, 'position')}
+                      {row.position ? formatMetricValue(row.position, 'position') : 'N/A'}
                     </span>
                   </TableCell>
                   <TableCell>

@@ -13,15 +13,21 @@ export interface CSVParseResult {
  * Common Ahrefs CSV column mappings
  */
 const AHREFS_COLUMN_MAPPINGS = {
-  // Standard Ahrefs export columns
+  // Map to the specific Ahrefs export columns
   keyword: ['keyword', 'query', 'search term', 'term'],
-  url: ['url', 'page', 'landing page', 'target url'],
-  position: ['position', 'rank', 'ranking', 'avg position'],
+  url: ['current url', 'url', 'page', 'landing page', 'target url', 'current url inside'],
+  position: ['current position', 'position', 'rank', 'ranking'],
   volume: ['volume', 'search volume', 'monthly searches', 'searches'],
-  difficulty: ['difficulty', 'kd', 'keyword difficulty', 'competition'],
+  difficulty: ['kd', 'difficulty', 'keyword difficulty', 'competition'],
   cpc: ['cpc', 'cost per click', 'avg cpc', 'price'],
-  traffic: ['traffic', 'organic traffic', 'estimated traffic', 'visits'],
-  date: ['date', 'month', 'period', 'time'],
+  traffic: ['current organic traffic', 'organic traffic', 'traffic', 'estimated traffic', 'visits'],
+  date: ['current date', 'date', 'month', 'period', 'time'],
+  // Comparison columns
+  previousTraffic: ['previous organic traffic', 'prev organic traffic', 'previous traffic'],
+  trafficChange: ['organic traffic change', 'traffic change', 'traffic diff'],
+  previousPosition: ['previous position', 'prev position', 'previous rank'],
+  positionChange: ['position change', 'rank change', 'position diff'],
+  previousDate: ['previous date', 'prev date', 'previous period'],
 };
 
 /**
@@ -109,6 +115,12 @@ export function parseAhrefsCSV(csvContent: string): Promise<CSVParseResult> {
             cpc: findColumnMatch(headers, AHREFS_COLUMN_MAPPINGS.cpc),
             traffic: findColumnMatch(headers, AHREFS_COLUMN_MAPPINGS.traffic),
             date: findColumnMatch(headers, AHREFS_COLUMN_MAPPINGS.date),
+            // Comparison columns
+            previousTraffic: findColumnMatch(headers, AHREFS_COLUMN_MAPPINGS.previousTraffic),
+            trafficChange: findColumnMatch(headers, AHREFS_COLUMN_MAPPINGS.trafficChange),
+            previousPosition: findColumnMatch(headers, AHREFS_COLUMN_MAPPINGS.previousPosition),
+            positionChange: findColumnMatch(headers, AHREFS_COLUMN_MAPPINGS.positionChange),
+            previousDate: findColumnMatch(headers, AHREFS_COLUMN_MAPPINGS.previousDate),
           };
 
           // Check if we have required columns
@@ -120,13 +132,14 @@ export function parseAhrefsCSV(csvContent: string): Promise<CSVParseResult> {
             return;
           }
 
-          if (!columnMappings.position) {
-            resolve({
-              success: false,
-              errors: ['Required column "position" not found. Available columns: ' + headers.join(', ')],
-            });
-            return;
-          }
+          // Position is now optional since we can get it from comparison data
+          // if (!columnMappings.position) {
+          //   resolve({
+          //     success: false,
+          //     errors: ['Required column "position" not found. Available columns: ' + headers.join(', ')],
+          //   });
+          //   return;
+          // }
 
           // Process rows
           const processedData: AhrefsMetric[] = [];
@@ -141,11 +154,7 @@ export function parseAhrefsCSV(csvContent: string): Promise<CSVParseResult> {
                 return;
               }
 
-              const position = parseNumericValue(row[columnMappings.position!]);
-              if (position === undefined) {
-                errors.push(`Row ${index + 2}: Invalid position value`);
-                return;
-              }
+              const position = columnMappings.position ? parseNumericValue(row[columnMappings.position]) : undefined;
 
               const ahrefsMetric: AhrefsMetric = {
                 date: columnMappings.date 
@@ -158,6 +167,12 @@ export function parseAhrefsCSV(csvContent: string): Promise<CSVParseResult> {
                 difficulty: columnMappings.difficulty ? parseNumericValue(row[columnMappings.difficulty]) : undefined,
                 cpc: columnMappings.cpc ? parseNumericValue(row[columnMappings.cpc]) : undefined,
                 traffic: columnMappings.traffic ? parseNumericValue(row[columnMappings.traffic]) : undefined,
+                // Comparison fields
+                previousTraffic: columnMappings.previousTraffic ? parseNumericValue(row[columnMappings.previousTraffic]) : undefined,
+                trafficChange: columnMappings.trafficChange ? parseNumericValue(row[columnMappings.trafficChange]) : undefined,
+                previousPosition: columnMappings.previousPosition ? parseNumericValue(row[columnMappings.previousPosition]) : undefined,
+                positionChange: columnMappings.positionChange ? parseNumericValue(row[columnMappings.positionChange]) : undefined,
+                previousDate: columnMappings.previousDate ? parseDateValue(row[columnMappings.previousDate]?.toString() || '') : undefined,
               };
 
               // Validate with Zod schema

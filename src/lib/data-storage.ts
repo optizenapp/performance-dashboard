@@ -98,6 +98,7 @@ export async function loadDataFromStorage(): Promise<NormalizedMetric[]> {
       request.onsuccess = () => {
         const data = request.result.map(item => {
           // Remove the IndexedDB id field
+          // eslint-disable-next-line @typescript-eslint/no-unused-vars
           const { id, ...normalizedItem } = item;
           return normalizedItem as NormalizedMetric;
         });

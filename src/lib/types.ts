@@ -30,11 +30,17 @@ export const AhrefsMetricSchema = z.object({
   date: z.string(),
   keyword: z.string(),
   url: z.string().optional(),
-  position: z.number(),
+  position: z.number().optional(),
   volume: z.number().optional(),
   difficulty: z.number().optional(),
   cpc: z.number().optional(),
   traffic: z.number().optional(),
+  // Comparison fields
+  previousTraffic: z.number().optional(),
+  trafficChange: z.number().optional(),
+  previousPosition: z.number().optional(),
+  positionChange: z.number().optional(),
+  previousDate: z.string().optional(),
 });
 
 // Ahrefs Comparison CSV Schema (for comparison exports)
@@ -71,7 +77,7 @@ export const NormalizedMetricSchema = z.object({
   clicks: z.number().optional(),
   impressions: z.number().optional(),
   ctr: z.number().optional(),
-  position: z.number(),
+  position: z.number().optional(),
   volume: z.number().optional(),
   difficulty: z.number().optional(),
   cpc: z.number().optional(),
@@ -123,7 +129,7 @@ export const TableRowSchema = z.object({
   clicks: z.number().optional(),
   impressions: z.number().optional(),
   ctr: z.number().optional(),
-  position: z.number(),
+  position: z.number().optional(),
   volume: z.number().optional(),
   source: z.string(),
   change: z.number().optional(), // percentage change from previous period
@@ -140,6 +146,17 @@ export type DateRange = z.infer<typeof DateRangeSchema>;
 export type FilterOptions = z.infer<typeof FilterOptionsSchema>;
 export type ChartDataPoint = z.infer<typeof ChartDataPointSchema>;
 export type TableRow = z.infer<typeof TableRowSchema>;
+
+// Performance Clusters Types
+export const PerformanceClusterSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  urls: z.array(z.string()),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+
+export type PerformanceCluster = z.infer<typeof PerformanceClusterSchema>;
 
 // API Response Types
 export interface ApiResponse<T> {

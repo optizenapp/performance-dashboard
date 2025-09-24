@@ -4,7 +4,7 @@ import { useState, useMemo, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Upload, BarChart3, TrendingUp } from 'lucide-react';
-import { NormalizedMetric, FilterOptions } from '@/lib/types';
+import { NormalizedMetric, FilterOptions, ChartDataPoint } from '@/lib/types';
 import { getDateRangePreset } from '@/lib/data-utils';
 import { SOURCES } from '@/lib/types';
 import { prepareChartData, prepareTableData, extractFilterOptions, normalizeAhrefsData } from '@/lib/data-utils';
@@ -13,12 +13,13 @@ import { FilterPanel } from '@/components/filters/filter-panel';
 import { PerformanceChart } from '@/components/charts/performance-chart';
 import { DataTable } from '@/components/tables/data-table';
 import { GSCConnection } from '@/components/gsc/gsc-connection';
+import { PerformanceClusters } from '@/components/clusters/performance-clusters';
 import { saveDataToStorage, loadDataFromStorage, hasStoredData, clearStoredData } from '@/lib/data-storage';
 
 export default function Dashboard() {
   const [data, setData] = useState<NormalizedMetric[]>([]);
   const [loading, setLoading] = useState(false);
-  const [selectedMetric, setSelectedMetric] = useState('clicks');
+  const [selectedChartMetrics, setSelectedChartMetrics] = useState<string[]>(['clicks']);
   const [filters, setFilters] = useState<FilterOptions>({
     dateRange: getDateRangePreset('last_30_days'),
     metrics: ['clicks', 'impressions', 'ctr', 'position'],
@@ -126,7 +127,15 @@ export default function Dashboard() {
 
   // Derived data
   const filterOptions = extractFilterOptions(data); // Use all data for filter options
-  const chartData = prepareChartData(filteredData, selectedMetric, 'date');
+  // Prepare chart data for multiple metrics
+  const chartData = useMemo(() => {
+    const allChartData: ChartDataPoint[] = [];
+    selectedChartMetrics.forEach(metric => {
+      const metricData = prepareChartData(filteredData, metric, 'date');
+      allChartData.push(...metricData);
+    });
+    return allChartData;
+  }, [filteredData, selectedChartMetrics]);
   const tableData = prepareTableData(filteredData);
 
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -207,10 +216,10 @@ export default function Dashboard() {
   };
 
   const downloadSampleCSV = () => {
-    const sampleCSV = `keyword,url,position,volume,difficulty,cpc,traffic,date
-seo reporting tool,/seo-tools,3,1200,45,2.50,180,2024-01-01
-keyword research,/blog/keyword-research,7,800,35,1.80,120,2024-01-01
-search console api,/api-docs,12,500,25,3.20,80,2024-01-01`;
+    const sampleCSV = `Keyword,Current URL,Current position,Volume,KD,CPC,Current organic traffic,Current date,Previous organic traffic,Organic traffic change,Previous position,Position change,Previous date
+seo reporting tool,https://example.com/seo-tools,3,1200,45,2.50,180,2024-01-01,150,-30,5,2,2023-12-01
+keyword research,https://example.com/blog/keyword-research,7,800,35,1.80,120,2024-01-01,100,-20,9,2,2023-12-01
+search console api,https://example.com/api-docs,12,500,25,3.20,80,2024-01-01,60,-20,15,3,2023-12-01`;
     
     const blob = new Blob([sampleCSV], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
@@ -428,9 +437,14 @@ search console api,/api-docs,12,500,25,3.20,80,2024-01-01`;
 
         {/* Quick Stats */}
         <div className="mb-8">
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-            Quick Overview
-          </h2>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
+              Quick Overview
+            </h2>
+            <div className="text-sm text-gray-600 dark:text-gray-400">
+              {new Date(filters.dateRange.startDate).toLocaleDateString()} - {new Date(filters.dateRange.endDate).toLocaleDateString()}
+            </div>
+          </div>
           <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -487,7 +501,7 @@ search console api,/api-docs,12,500,25,3.20,80,2024-01-01`;
                   {summaryStats.avgPosition > 0 ? summaryStats.avgPosition.toFixed(1) : 'N/A'}
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  Search ranking position
+                  Average ranking position
                 </p>
               </CardContent>
             </Card>
@@ -498,8 +512,8 @@ search console api,/api-docs,12,500,25,3.20,80,2024-01-01`;
         <div className="space-y-8">
           <PerformanceChart
             data={chartData}
-            selectedMetric={selectedMetric}
-            onMetricChange={setSelectedMetric}
+            selectedMetrics={selectedChartMetrics}
+            onMetricsChange={setSelectedChartMetrics}
             availableMetrics={filters.metrics}
             showComparison={filters.sources.length > 1}
           />
@@ -507,6 +521,12 @@ search console api,/api-docs,12,500,25,3.20,80,2024-01-01`;
           <DataTable
             data={tableData}
             loading={loading}
+          />
+
+          {/* Performance Clusters */}
+          <PerformanceClusters
+            data={filteredData}
+            filters={filters}
           />
         </div>
       </main>
