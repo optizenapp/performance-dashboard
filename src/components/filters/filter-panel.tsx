@@ -10,7 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { X, Filter, RotateCcw, TrendingUp } from 'lucide-react';
 import { DateRangePicker } from './date-range-picker';
 import { MetricSelector } from './metric-selector';
-import { FilterOptions, SOURCES } from '@/lib/types';
+import { FilterOptions, SOURCES, ComparisonPreset } from '@/lib/types';
 import { getComparisonDateRange, getComparisonPresetRanges } from '@/lib/data-utils';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
@@ -235,7 +235,7 @@ export function FilterPanel({
                 <Label className="text-sm font-medium">Comparison Period</Label>
                 <Select
                   value={filters.comparisonPreset || 'last_28d_vs_previous'}
-                  onValueChange={(preset) => {
+                  onValueChange={(preset: ComparisonPreset) => {
                     if (preset === 'custom') {
                       updateFilters({ comparisonPreset: preset });
                     } else {
