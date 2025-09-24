@@ -24,6 +24,24 @@ export default function Dashboard() {
     sources: [SOURCES.GSC, SOURCES.AHREFS],
   });
 
+  // Handle OAuth callback results
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const authResult = urlParams.get('auth');
+    const error = urlParams.get('error');
+    
+    if (authResult === 'success') {
+      // Clear URL parameters
+      window.history.replaceState({}, document.title, window.location.pathname);
+      // You could show a success message here
+      console.log('GSC authentication successful!');
+    } else if (error) {
+      // Clear URL parameters
+      window.history.replaceState({}, document.title, window.location.pathname);
+      console.error('GSC authentication error:', error);
+    }
+  }, []);
+
   // Mock data for development
   useEffect(() => {
     // TODO: Replace with actual API calls

@@ -44,29 +44,44 @@ export class GSCClient {
     const { tokens } = await this.auth.getToken(code);
     this.auth.setCredentials(tokens);
     
-    // Store tokens in localStorage for persistence
+    // Store tokens in localStorage for persistence (client-side only)
     if (typeof window !== 'undefined') {
       localStorage.setItem('gsc_tokens', JSON.stringify(tokens));
+    }
+    
+    // For server-side, we'll store in a simple in-memory cache
+    // In production, you'd want to use a proper database or session storage
+    if (typeof window === 'undefined') {
+      global.gscTokens = tokens;
     }
   }
 
   /**
-   * Load stored credentials from localStorage
+   * Load stored credentials from localStorage or server cache
    */
   loadStoredCredentials(): boolean {
-    if (typeof window === 'undefined') return false;
-    
-    const stored = localStorage.getItem('gsc_tokens');
-    if (stored) {
-      try {
-        const tokens = JSON.parse(stored);
-        this.auth.setCredentials(tokens);
-        return true;
-      } catch (error) {
-        console.error('Failed to load stored credentials:', error);
-        localStorage.removeItem('gsc_tokens');
+    // Client-side: use localStorage
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem('gsc_tokens');
+      if (stored) {
+        try {
+          const tokens = JSON.parse(stored);
+          this.auth.setCredentials(tokens);
+          return true;
+        } catch (error) {
+          console.error('Failed to load stored credentials:', error);
+          localStorage.removeItem('gsc_tokens');
+        }
       }
+      return false;
     }
+    
+    // Server-side: use global cache
+    if (global.gscTokens) {
+      this.auth.setCredentials(global.gscTokens);
+      return true;
+    }
+    
     return false;
   }
 
