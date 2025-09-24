@@ -55,17 +55,12 @@ export function GSCConnection({ onDataFetch, dateRange: initialDateRange }: GSCC
     try {
       setFetchingData(true);
       
-      // Fetch both time series and aggregated data
-      const [timeSeriesData, aggregatedData] = await Promise.all([
-        fetchData(dateRange.startDate, dateRange.endDate, ['date'], true),
-        fetchData(dateRange.startDate, dateRange.endDate, ['query', 'page'], false),
-      ]);
-      
-      // Combine both datasets
-      const combinedData = [...timeSeriesData, ...aggregatedData];
+      // Fetch aggregated data for table (query-level data)
+      // Time series data is mainly for charts and contains "Total" entries that we don't want in tables
+      const aggregatedData = await fetchData(dateRange.startDate, dateRange.endDate, ['query', 'page'], false);
       
       if (onDataFetch) {
-        onDataFetch(combinedData);
+        onDataFetch(aggregatedData);
       }
     } catch (error) {
       console.error('Failed to fetch GSC data:', error);
