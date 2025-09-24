@@ -25,83 +25,7 @@ export default function Dashboard() {
   });
 
 
-  // Mock data for development
-  useEffect(() => {
-    // TODO: Replace with actual API calls
-    const generateMockData = (): NormalizedMetric[] => {
-      const queries = [
-        'seo reporting tool',
-        'google search console api',
-        'ahrefs keyword research',
-        'search engine optimization',
-        'website traffic analysis',
-        'keyword ranking tracker',
-        'seo dashboard',
-        'organic search metrics',
-      ];
-      
-      const urls = [
-        '/seo-tools',
-        '/blog/seo-guide',
-        '/features/reporting',
-        '/dashboard',
-        '/analytics',
-        '/keywords',
-        '/rankings',
-        '/traffic-analysis',
-      ];
-
-      const mockData: NormalizedMetric[] = [];
-      const startDate = new Date('2024-01-01');
-      
-      // Generate 30 days of data
-      for (let day = 0; day < 30; day++) {
-        const currentDate = new Date(startDate);
-        currentDate.setDate(startDate.getDate() + day);
-        const dateStr = currentDate.toISOString().split('T')[0];
-        
-        queries.forEach((query, queryIndex) => {
-          // GSC data
-          mockData.push({
-            date: dateStr,
-            source: SOURCES.GSC,
-            query,
-            url: urls[queryIndex % urls.length],
-            clicks: Math.floor(Math.random() * 200) + 50,
-            impressions: Math.floor(Math.random() * 3000) + 1000,
-            ctr: Math.random() * 8 + 2,
-            position: Math.random() * 15 + 1,
-            volume: undefined,
-            difficulty: undefined,
-            cpc: undefined,
-            traffic: undefined,
-          });
-          
-          // Ahrefs data (not every query has Ahrefs data)
-          if (Math.random() > 0.3) {
-            mockData.push({
-              date: dateStr,
-              source: SOURCES.AHREFS,
-              query,
-              url: urls[queryIndex % urls.length],
-              clicks: undefined,
-              impressions: undefined,
-              ctr: undefined,
-              position: Math.random() * 20 + 1,
-              volume: Math.floor(Math.random() * 2000) + 500,
-              difficulty: Math.floor(Math.random() * 80) + 20,
-              cpc: Math.random() * 5 + 0.5,
-              traffic: Math.floor(Math.random() * 300) + 100,
-            });
-          }
-        });
-      }
-      
-      return mockData;
-    };
-
-    setData(generateMockData());
-  }, []);
+  // Start with empty data - will be populated by GSC connection or CSV upload
 
   // Calculate filtered data
   const filteredData = useMemo(() => {
@@ -113,14 +37,20 @@ export default function Dashboard() {
       
       if (itemDate < startDate || itemDate > endDate) return false;
       
-      // Query filter
-      if (filters.query && !item.query?.toLowerCase().includes(filters.query.toLowerCase())) {
-        return false;
+      // Query filter - if queries are selected, item must match at least one
+      if (filters.queries && filters.queries.length > 0) {
+        const matchesQuery = filters.queries.some(filterQuery =>
+          item.query?.toLowerCase().includes(filterQuery.toLowerCase())
+        );
+        if (!matchesQuery) return false;
       }
       
-      // URL filter
-      if (filters.url && !item.url?.toLowerCase().includes(filters.url.toLowerCase())) {
-        return false;
+      // URL filter - if URLs are selected, item must match at least one
+      if (filters.urls && filters.urls.length > 0) {
+        const matchesUrl = filters.urls.some(filterUrl =>
+          item.url?.toLowerCase().includes(filterUrl.toLowerCase())
+        );
+        if (!matchesUrl) return false;
       }
       
       // Source filter
