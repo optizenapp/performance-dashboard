@@ -4,7 +4,7 @@ import { useState, useMemo, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Upload, BarChart3, TrendingUp } from 'lucide-react';
-import { NormalizedMetric, FilterOptions, ChartDataPoint, DashboardFilters, SectionFilters } from '@/lib/types';
+import { NormalizedMetric, FilterOptions, ChartDataPoint, SectionFilters } from '@/lib/types';
 import { getDateRangePreset } from '@/lib/data-utils';
 import { SOURCES } from '@/lib/types';
 import { prepareChartData, prepareTableData, extractFilterOptions, normalizeAhrefsData } from '@/lib/data-utils';
@@ -202,10 +202,10 @@ export default function Dashboard() {
     stats.avgCTR = ctrCount > 0 ? ctrSum / ctrCount : 0;
 
     return stats;
-  }, [filteredData]);
+  }, [data, filteredData]);
 
   // Derived data
-  const filterOptions = extractFilterOptions(data); // Use all data for filter options
+  const filterOptions = useMemo(() => extractFilterOptions(data), [data]); // Use all data for filter options
   // Prepare chart data for multiple metrics
   const chartData = useMemo(() => {
     const allChartData: ChartDataPoint[] = [];
@@ -642,7 +642,6 @@ search console api,https://example.com/api-docs,12,500,25,3.20,80,2024-01-01,60,
                 selectedMetrics={selectedChartMetrics}
                 onMetricsChange={setSelectedChartMetrics}
                 availableMetrics={filters.metrics.filter(metric => metric !== 'volume' && metric !== 'traffic')}
-                showComparison={sectionFilters.chart.enableComparison}
                 sectionFilters={sectionFilters.chart}
               />
             </CardContent>

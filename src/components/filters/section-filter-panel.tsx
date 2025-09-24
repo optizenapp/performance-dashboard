@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
-import { CalendarDays, BarChart3 } from 'lucide-react';
+import { CalendarDays } from 'lucide-react';
 import { DateRangePicker } from './date-range-picker';
 import { SectionFilters, ComparisonPreset } from '@/lib/types';
 import { getComparisonPresetRanges } from '@/lib/data-utils';

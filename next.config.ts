@@ -1,16 +1,16 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  experimental: {
-    // Increase body size limit for large CSV uploads
-    serverComponentsExternalPackages: [],
-  },
+  // Moved from experimental.serverComponentsExternalPackages in Next.js 15+
+  serverExternalPackages: [],
+  
   // Configure API routes to handle larger payloads
-  api: {
-    bodyParser: {
-      sizeLimit: '50mb',
-    },
+  experimental: {
+    serverComponentsExternalPackages: [], // Keep for backwards compatibility
   },
+  
+  // Note: api.bodyParser is only for pages router, not app router
+  // For app router, use route.ts files with custom body parsing
 };
 
 export default nextConfig;

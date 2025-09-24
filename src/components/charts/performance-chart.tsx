@@ -29,7 +29,6 @@ interface PerformanceChartProps {
   onMetricsChange: (metrics: string[]) => void;
   availableMetrics: string[];
   height?: number;
-  showComparison?: boolean;
   sectionFilters?: SectionFilters;
 }
 
@@ -77,7 +76,6 @@ export function PerformanceChart({
   onMetricsChange,
   availableMetrics,
   height = 400,
-  showComparison = false,
   sectionFilters,
 }: PerformanceChartProps) {
   const [chartType, setChartType] = useState<'line' | 'bar'>('line');

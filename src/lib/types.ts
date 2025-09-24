@@ -184,7 +184,6 @@ export type AhrefsComparisonMetric = z.infer<typeof AhrefsComparisonMetricSchema
 export type NormalizedMetric = z.infer<typeof NormalizedMetricSchema>;
 export type ComparisonPreset = z.infer<typeof ComparisonPresetSchema>;
 export type DateRange = z.infer<typeof DateRangeSchema>;
-export type FilterOptions = z.infer<typeof FilterOptionsSchema>;
 export type ChartDataPoint = z.infer<typeof ChartDataPointSchema>;
 export type TableRow = z.infer<typeof TableRowSchema>;
 
