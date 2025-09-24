@@ -212,7 +212,6 @@ search console api,/api-docs,12,500,25,3.20,80,2024-01-01`;
             {/* Google Search Console */}
             <GSCConnection 
               onDataFetch={handleGSCData}
-              dateRange={filters.dateRange}
             />
 
             {/* Ahrefs CSV Upload */}

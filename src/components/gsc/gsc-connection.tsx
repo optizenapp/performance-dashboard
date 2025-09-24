@@ -6,16 +6,18 @@ import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Search, CheckCircle, AlertCircle, Loader2, ExternalLink } from 'lucide-react';
+import { Search, CheckCircle, AlertCircle, Loader2, ExternalLink, Calendar } from 'lucide-react';
+import { DateRangePicker } from '@/components/filters/date-range-picker';
+import { getDateRangePreset } from '@/lib/data-utils';
 import { useGSC } from '@/hooks/useGSC';
 import { NormalizedMetric } from '@/lib/types';
 
 interface GSCConnectionProps {
   onDataFetch?: (data: NormalizedMetric[]) => void;
-  dateRange: { startDate: string; endDate: string };
+  dateRange?: { startDate: string; endDate: string };
 }
 
-export function GSCConnection({ onDataFetch, dateRange }: GSCConnectionProps) {
+export function GSCConnection({ onDataFetch, dateRange: initialDateRange }: GSCConnectionProps) {
   const {
     isAuthenticated,
     isLoading,
@@ -30,6 +32,9 @@ export function GSCConnection({ onDataFetch, dateRange }: GSCConnectionProps) {
   } = useGSC();
 
   const [fetchingData, setFetchingData] = useState(false);
+  const [dateRange, setDateRange] = useState(() => 
+    initialDateRange || getDateRangePreset('last_30_days')
+  );
 
   // Check auth status on mount
   useEffect(() => {
@@ -150,6 +155,18 @@ export function GSCConnection({ onDataFetch, dateRange }: GSCConnectionProps) {
                   ))}
                 </SelectContent>
               </Select>
+            </div>
+
+            {/* Date Range Selection */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium flex items-center space-x-2">
+                <Calendar className="h-4 w-4" />
+                <span>Import Date Range:</span>
+              </label>
+              <DateRangePicker
+                dateRange={dateRange}
+                onDateRangeChange={setDateRange}
+              />
             </div>
 
             {/* Data Import */}
