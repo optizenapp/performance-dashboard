@@ -30,7 +30,7 @@ export default function Dashboard() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // Remove dependency to prevent infinite loop
-  const [filters, setFilters] = useState<FilterOptions>({
+  const [filters] = useState<FilterOptions>({
     dateRange: getDateRangePreset('last_30_days'),
     metrics: ['clicks', 'impressions', 'ctr', 'position'],
     sources: [SOURCES.GSC, SOURCES.AHREFS],
@@ -150,6 +150,8 @@ export default function Dashboard() {
   }, [data, filters]);
 
   // Calculate summary statistics from filtered data
+  // Legacy summaryStats - no longer used but kept for compatibility
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const summaryStats = useMemo(() => {
     console.log('🔍 Calculating summaryStats:', {
       dataLength: data.length,
@@ -203,7 +205,8 @@ export default function Dashboard() {
     return stats;
   }, [data, filteredData]);
 
-  // Derived data
+  // Derived data - legacy filter options, no longer used
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const filterOptions = useMemo(() => extractFilterOptions(data), [data]); // Use all data for filter options
 
   // Section-specific filtered data
@@ -340,7 +343,6 @@ export default function Dashboard() {
     // Check if comparison period is within available data range
     const allDates = data.map(item => new Date(item.date)).sort((a, b) => a.getTime() - b.getTime());
     const earliestDataDate = allDates[0];
-    const latestDataDate = allDates[allDates.length - 1];
     const comparisonStart = new Date(sectionFilters.quickView.comparisonDateRange.startDate);
     
     if (earliestDataDate && comparisonStart < earliestDataDate) {
@@ -413,7 +415,7 @@ export default function Dashboard() {
     });
 
     return { current: quickViewStats, previous: comparisonStats, changes };
-  }, [quickViewStats, sectionFilters.quickView.enableComparison, sectionFilters.quickView.comparisonDateRange, data, filters.sources]);
+  }, [quickViewStats, sectionFilters.quickView.enableComparison, sectionFilters.quickView.comparisonDateRange, sectionFilters.quickView.dateRange.startDate, sectionFilters.quickView.dateRange.endDate, data, filters.sources]);
 
   const tableData = prepareTableData(sectionFilteredData.table, sectionFilters.table.enableComparison);
   

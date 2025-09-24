@@ -43,8 +43,8 @@ export function ComparisonSettings({ filters, onFiltersChange }: ComparisonSetti
             onCheckedChange={(checked) => {
               const updates: Partial<FilterOptions> = { enableComparison: checked };
               if (checked) {
-                updates.comparisonPreset = 'last_28d_vs_previous';
-                const ranges = getComparisonPresetRanges('last_28d_vs_previous');
+                updates.comparisonPreset = 'last_30d_vs_previous';
+                const ranges = getComparisonPresetRanges('last_30d_vs_previous');
                 updates.dateRange = ranges.primary;
                 updates.comparisonDateRange = ranges.comparison;
               }
