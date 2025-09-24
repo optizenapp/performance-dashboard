@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Upload, BarChart3, TrendingUp } from 'lucide-react';
@@ -103,10 +103,80 @@ export default function Dashboard() {
     setData(generateMockData());
   }, []);
 
+  // Calculate filtered data
+  const filteredData = useMemo(() => {
+    return data.filter(item => {
+      // Date range filter
+      const itemDate = new Date(item.date);
+      const startDate = new Date(filters.dateRange.startDate);
+      const endDate = new Date(filters.dateRange.endDate);
+      
+      if (itemDate < startDate || itemDate > endDate) return false;
+      
+      // Query filter
+      if (filters.query && !item.query?.toLowerCase().includes(filters.query.toLowerCase())) {
+        return false;
+      }
+      
+      // URL filter
+      if (filters.url && !item.url?.toLowerCase().includes(filters.url.toLowerCase())) {
+        return false;
+      }
+      
+      // Source filter
+      if (!filters.sources.includes(item.source)) {
+        return false;
+      }
+      
+      return true;
+    });
+  }, [data, filters]);
+
+  // Calculate summary statistics from filtered data
+  const summaryStats = useMemo(() => {
+    const stats = {
+      totalClicks: 0,
+      totalImpressions: 0,
+      avgCTR: 0,
+      avgPosition: 0,
+      totalVolume: 0,
+      totalTraffic: 0,
+    };
+
+    if (filteredData.length === 0) return stats;
+
+    let positionSum = 0;
+    let positionCount = 0;
+    let ctrSum = 0;
+    let ctrCount = 0;
+
+    filteredData.forEach(item => {
+      stats.totalClicks += item.clicks || 0;
+      stats.totalImpressions += item.impressions || 0;
+      stats.totalVolume += item.volume || 0;
+      stats.totalTraffic += item.traffic || 0;
+
+      if (item.position && item.position > 0) {
+        positionSum += item.position;
+        positionCount++;
+      }
+
+      if (item.ctr !== undefined && item.ctr !== null) {
+        ctrSum += item.ctr;
+        ctrCount++;
+      }
+    });
+
+    stats.avgPosition = positionCount > 0 ? positionSum / positionCount : 0;
+    stats.avgCTR = ctrCount > 0 ? ctrSum / ctrCount : 0;
+
+    return stats;
+  }, [filteredData]);
+
   // Derived data
-  const filterOptions = extractFilterOptions(data);
-  const chartData = prepareChartData(data, selectedMetric, 'date');
-  const tableData = prepareTableData(data);
+  const filterOptions = extractFilterOptions(data); // Use all data for filter options
+  const chartData = prepareChartData(filteredData, selectedMetric, 'date');
+  const tableData = prepareTableData(filteredData);
 
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -301,9 +371,11 @@ search console api,/api-docs,12,500,25,3.20,80,2024-01-01`;
                 <TrendingUp className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">150</div>
+                <div className="text-2xl font-bold">
+                  {summaryStats.totalClicks.toLocaleString()}
+                </div>
                 <p className="text-xs text-muted-foreground">
-                  +12% from last month
+                  From {filteredData.length} data points
                 </p>
               </CardContent>
             </Card>
@@ -314,9 +386,11 @@ search console api,/api-docs,12,500,25,3.20,80,2024-01-01`;
                 <TrendingUp className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">2,500</div>
+                <div className="text-2xl font-bold">
+                  {summaryStats.totalImpressions.toLocaleString()}
+                </div>
                 <p className="text-xs text-muted-foreground">
-                  +8% from last month
+                  From GSC & Ahrefs data
                 </p>
               </CardContent>
             </Card>
@@ -327,9 +401,11 @@ search console api,/api-docs,12,500,25,3.20,80,2024-01-01`;
                 <TrendingUp className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">6.0%</div>
+                <div className="text-2xl font-bold">
+                  {(summaryStats.avgCTR * 100).toFixed(1)}%
+                </div>
                 <p className="text-xs text-muted-foreground">
-                  +0.5% from last month
+                  Click-through rate
                 </p>
               </CardContent>
             </Card>
@@ -340,9 +416,11 @@ search console api,/api-docs,12,500,25,3.20,80,2024-01-01`;
                 <TrendingUp className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">3.2</div>
+                <div className="text-2xl font-bold">
+                  {summaryStats.avgPosition > 0 ? summaryStats.avgPosition.toFixed(1) : 'N/A'}
+                </div>
                 <p className="text-xs text-muted-foreground">
-                  -0.3 from last month
+                  Search ranking position
                 </p>
               </CardContent>
             </Card>
