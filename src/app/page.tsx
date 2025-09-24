@@ -1,103 +1,313 @@
-import Image from "next/image";
+'use client';
 
-export default function Home() {
+import { useState, useEffect } from 'react';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Upload, BarChart3, TrendingUp } from 'lucide-react';
+import { NormalizedMetric, FilterOptions } from '@/lib/types';
+import { getDateRangePreset } from '@/lib/data-utils';
+import { SOURCES } from '@/lib/types';
+import { prepareChartData, prepareTableData, extractFilterOptions, normalizeAhrefsData } from '@/lib/data-utils';
+import { parseAhrefsCSV, validateCSVFile, readFileAsText } from '@/lib/csv-parser';
+import { FilterPanel } from '@/components/filters/filter-panel';
+import { PerformanceChart } from '@/components/charts/performance-chart';
+import { DataTable } from '@/components/tables/data-table';
+import { GSCConnection } from '@/components/gsc/gsc-connection';
+
+export default function Dashboard() {
+  const [data, setData] = useState<NormalizedMetric[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [selectedMetric, setSelectedMetric] = useState('clicks');
+  const [filters, setFilters] = useState<FilterOptions>({
+    dateRange: getDateRangePreset('last_30_days'),
+    metrics: ['clicks', 'impressions', 'ctr', 'position'],
+    sources: [SOURCES.GSC, SOURCES.AHREFS],
+  });
+
+  // Mock data for development
+  useEffect(() => {
+    // TODO: Replace with actual API calls
+    const generateMockData = (): NormalizedMetric[] => {
+      const queries = [
+        'seo reporting tool',
+        'google search console api',
+        'ahrefs keyword research',
+        'search engine optimization',
+        'website traffic analysis',
+        'keyword ranking tracker',
+        'seo dashboard',
+        'organic search metrics',
+      ];
+      
+      const urls = [
+        '/seo-tools',
+        '/blog/seo-guide',
+        '/features/reporting',
+        '/dashboard',
+        '/analytics',
+        '/keywords',
+        '/rankings',
+        '/traffic-analysis',
+      ];
+
+      const mockData: NormalizedMetric[] = [];
+      const startDate = new Date('2024-01-01');
+      
+      // Generate 30 days of data
+      for (let day = 0; day < 30; day++) {
+        const currentDate = new Date(startDate);
+        currentDate.setDate(startDate.getDate() + day);
+        const dateStr = currentDate.toISOString().split('T')[0];
+        
+        queries.forEach((query, queryIndex) => {
+          // GSC data
+          mockData.push({
+            date: dateStr,
+            source: SOURCES.GSC,
+            query,
+            url: urls[queryIndex % urls.length],
+            clicks: Math.floor(Math.random() * 200) + 50,
+            impressions: Math.floor(Math.random() * 3000) + 1000,
+            ctr: Math.random() * 8 + 2,
+            position: Math.random() * 15 + 1,
+            volume: undefined,
+            difficulty: undefined,
+            cpc: undefined,
+            traffic: undefined,
+          });
+          
+          // Ahrefs data (not every query has Ahrefs data)
+          if (Math.random() > 0.3) {
+            mockData.push({
+              date: dateStr,
+              source: SOURCES.AHREFS,
+              query,
+              url: urls[queryIndex % urls.length],
+              clicks: undefined,
+              impressions: undefined,
+              ctr: undefined,
+              position: Math.random() * 20 + 1,
+              volume: Math.floor(Math.random() * 2000) + 500,
+              difficulty: Math.floor(Math.random() * 80) + 20,
+              cpc: Math.random() * 5 + 0.5,
+              traffic: Math.floor(Math.random() * 300) + 100,
+            });
+          }
+        });
+      }
+      
+      return mockData;
+    };
+
+    setData(generateMockData());
+  }, []);
+
+  // Derived data
+  const filterOptions = extractFilterOptions(data);
+  const chartData = prepareChartData(data, selectedMetric, 'date');
+  const tableData = prepareTableData(data);
+
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    // Validate file
+    const validation = validateCSVFile(file);
+    if (!validation.valid) {
+      alert(validation.error);
+      return;
+    }
+
+    setLoading(true);
+    try {
+      // Read file content
+      const csvContent = await readFileAsText(file);
+      
+      // Parse CSV
+      const parseResult = await parseAhrefsCSV(csvContent);
+      
+      if (parseResult.success && parseResult.data) {
+        // Normalize and add to existing data
+        const normalizedData = normalizeAhrefsData(parseResult.data);
+        setData(prevData => [...prevData, ...normalizedData]);
+        
+        alert(`Successfully imported ${parseResult.validRows} rows from ${parseResult.totalRows} total rows.`);
+        
+        if (parseResult.errors && parseResult.errors.length > 0) {
+          console.warn('Import warnings:', parseResult.errors);
+        }
+      } else {
+        alert(`Failed to import CSV: ${parseResult.errors?.join(', ') || 'Unknown error'}`);
+      }
+    } catch (error) {
+      console.error('CSV import error:', error);
+      alert('Failed to process CSV file. Please check the file format.');
+    } finally {
+      setLoading(false);
+      // Reset file input
+      event.target.value = '';
+    }
+  };
+
+  const handleGSCData = (gscData: NormalizedMetric[]) => {
+    // Replace existing GSC data and merge with Ahrefs data
+    const ahrefsData = data.filter(item => item.source === SOURCES.AHREFS);
+    setData([...gscData, ...ahrefsData]);
+  };
+
   return (
-    <div className="font-sans grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="font-mono list-inside list-decimal text-sm/6 text-center sm:text-left">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] font-mono font-semibold px-1 py-0.5 rounded">
-              src/app/page.tsx
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+      {/* Header */}
+      <header className="bg-white dark:bg-gray-800 shadow-sm border-b">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex justify-between items-center py-6">
+            <div className="flex items-center space-x-3">
+              <BarChart3 className="h-8 w-8 text-blue-600" />
+              <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
+                Performance Metrics - Medcerts.com
+              </h1>
+            </div>
+            <div className="flex items-center space-x-4">
+              <span className="text-sm text-gray-600 dark:text-gray-400">
+                Real-time SEO performance data
+              </span>
+            </div>
+          </div>
+        </div>
+      </header>
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
+      {/* Main Content */}
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Data Sources Section */}
+        <div className="mb-8">
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+            Data Sources
+          </h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Google Search Console */}
+            <GSCConnection 
+              onDataFetch={handleGSCData}
+              dateRange={filters.dateRange}
             />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
+
+            {/* Ahrefs CSV Upload */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center space-x-2">
+                  <Upload className="h-5 w-5 text-orange-600" />
+                  <span>Ahrefs Data</span>
+                </CardTitle>
+                <CardDescription>
+                  Upload CSV exports from Ahrefs for keyword and ranking data
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  <input
+                    type="file"
+                    accept=".csv"
+                    onChange={handleFileUpload}
+                    className="hidden"
+                    id="csv-upload"
+                  />
+                  <label htmlFor="csv-upload">
+                    <Button variant="outline" className="w-full cursor-pointer" disabled={loading}>
+                      <Upload className="h-4 w-4 mr-2" />
+                      {loading ? 'Processing...' : 'Upload CSV'}
+                    </Button>
+                  </label>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+
+        {/* Quick Stats */}
+        <div className="mb-8">
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+            Quick Overview
+          </h2>
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Total Clicks</CardTitle>
+                <TrendingUp className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">150</div>
+                <p className="text-xs text-muted-foreground">
+                  +12% from last month
+                </p>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Impressions</CardTitle>
+                <TrendingUp className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">2,500</div>
+                <p className="text-xs text-muted-foreground">
+                  +8% from last month
+                </p>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Avg. CTR</CardTitle>
+                <TrendingUp className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">6.0%</div>
+                <p className="text-xs text-muted-foreground">
+                  +0.5% from last month
+                </p>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Avg. Position</CardTitle>
+                <TrendingUp className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">3.2</div>
+                <p className="text-xs text-muted-foreground">
+                  -0.3 from last month
+                </p>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+
+        {/* Filters */}
+        <div className="mb-8">
+          <FilterPanel
+            filters={filters}
+            onFiltersChange={setFilters}
+            availableQueries={filterOptions.queries}
+            availableUrls={filterOptions.urls}
+          />
+        </div>
+
+        {/* Charts and Tables */}
+        <div className="space-y-8">
+          <PerformanceChart
+            data={chartData}
+            selectedMetric={selectedMetric}
+            onMetricChange={setSelectedMetric}
+            availableMetrics={filters.metrics}
+            showComparison={filters.sources.length > 1}
+          />
+
+          <DataTable
+            data={tableData}
+            loading={loading}
+          />
         </div>
       </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
     </div>
   );
 }

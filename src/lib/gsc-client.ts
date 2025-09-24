@@ -1,0 +1,238 @@
+import { google } from 'googleapis';
+import { GSCMetric, NormalizedMetric, SOURCES } from './types';
+import { normalizeGSCData } from './data-utils';
+
+// Google Search Console API client
+export class GSCClient {
+  private auth: InstanceType<typeof google.auth.OAuth2>;
+  private searchconsole: ReturnType<typeof google.searchconsole>;
+
+  constructor() {
+    // Initialize OAuth2 client
+    const redirectUri = process.env.NEXT_PUBLIC_GOOGLE_REDIRECT_URI || 
+      (typeof window !== 'undefined' 
+        ? `${window.location.origin}/api/auth/callback`
+        : 'http://localhost:3000/api/auth/callback'
+      );
+    
+    this.auth = new google.auth.OAuth2(
+      process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID,
+      process.env.GOOGLE_CLIENT_SECRET,
+      redirectUri
+    );
+
+    this.searchconsole = google.searchconsole({ version: 'v1', auth: this.auth });
+  }
+
+  /**
+   * Get OAuth2 authorization URL
+   */
+  getAuthUrl(): string {
+    const scopes = ['https://www.googleapis.com/auth/webmasters.readonly'];
+    
+    return this.auth.generateAuthUrl({
+      access_type: 'offline',
+      scope: scopes,
+      prompt: 'consent',
+    });
+  }
+
+  /**
+   * Set access token from OAuth callback
+   */
+  async setCredentials(code: string): Promise<void> {
+    const { tokens } = await this.auth.getToken(code);
+    this.auth.setCredentials(tokens);
+    
+    // Store tokens in localStorage for persistence
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('gsc_tokens', JSON.stringify(tokens));
+    }
+  }
+
+  /**
+   * Load stored credentials from localStorage
+   */
+  loadStoredCredentials(): boolean {
+    if (typeof window === 'undefined') return false;
+    
+    const stored = localStorage.getItem('gsc_tokens');
+    if (stored) {
+      try {
+        const tokens = JSON.parse(stored);
+        this.auth.setCredentials(tokens);
+        return true;
+      } catch (error) {
+        console.error('Failed to load stored credentials:', error);
+        localStorage.removeItem('gsc_tokens');
+      }
+    }
+    return false;
+  }
+
+  /**
+   * Check if client is authenticated
+   */
+  isAuthenticated(): boolean {
+    return !!(this.auth.credentials && this.auth.credentials.access_token);
+  }
+
+  /**
+   * Get list of verified sites
+   */
+  async getSites(): Promise<string[]> {
+    try {
+      const response = await this.searchconsole.sites.list();
+      return response.data.siteEntry
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        ?.filter((site: any) => site.permissionLevel === 'siteOwner' || site.permissionLevel === 'siteFullUser')
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        .map((site: any) => site.siteUrl) || [];
+    } catch (error) {
+      console.error('Failed to get sites:', error);
+      throw new Error('Failed to retrieve sites from Google Search Console');
+    }
+  }
+
+  /**
+   * Query Search Console data
+   */
+  async querySearchConsole(
+    siteUrl: string,
+    startDate: string,
+    endDate: string,
+    dimensions: string[] = ['query'],
+    rowLimit: number = 1000
+  ): Promise<GSCMetric[]> {
+    try {
+      const request = {
+        siteUrl,
+        requestBody: {
+          startDate,
+          endDate,
+          dimensions,
+          rowLimit,
+          startRow: 0,
+        },
+      };
+
+      const response = await this.searchconsole.searchanalytics.query(request);
+      const data = response.data;
+
+      if (!data.rows || data.rows.length === 0) {
+        return [];
+      }
+
+      // Transform GSC response to our format
+      return data.rows.map((row) => {
+        const keys = row.keys || [];
+        
+        return {
+          date: startDate, // GSC doesn't return date in aggregated queries, use start date
+          query: dimensions.includes('query') ? keys[dimensions.indexOf('query')] : undefined,
+          page: dimensions.includes('page') ? keys[dimensions.indexOf('page')] : undefined,
+          country: dimensions.includes('country') ? keys[dimensions.indexOf('country')] : undefined,
+          device: dimensions.includes('device') ? keys[dimensions.indexOf('device')] : undefined,
+          clicks: row.clicks || 0,
+          impressions: row.impressions || 0,
+          ctr: row.ctr || 0,
+          position: row.position || 0,
+        };
+      });
+    } catch (error) {
+      console.error('GSC API Error:', error);
+      throw new Error('Failed to query Google Search Console API');
+    }
+  }
+
+  /**
+   * Get performance data for date range
+   */
+  async getPerformanceData(
+    siteUrl: string,
+    startDate: string,
+    endDate: string,
+    dimensions: string[] = ['query', 'page']
+  ): Promise<NormalizedMetric[]> {
+    const gscData = await this.querySearchConsole(siteUrl, startDate, endDate, dimensions);
+    return normalizeGSCData(gscData);
+  }
+
+  /**
+   * Get time series data (day by day)
+   */
+  async getTimeSeriesData(
+    siteUrl: string,
+    startDate: string,
+    endDate: string,
+    dimensions: string[] = ['date']
+  ): Promise<NormalizedMetric[]> {
+    try {
+      // For time series, we need to include 'date' dimension
+      if (!dimensions.includes('date')) {
+        dimensions = ['date', ...dimensions];
+      }
+
+      const request = {
+        siteUrl,
+        requestBody: {
+          startDate,
+          endDate,
+          dimensions,
+          rowLimit: 25000, // Higher limit for time series
+          startRow: 0,
+        },
+      };
+
+      const response = await this.searchconsole.searchanalytics.query(request);
+      const data = response.data;
+
+      if (!data.rows || data.rows.length === 0) {
+        return [];
+      }
+
+      // Transform time series data
+      return data.rows.map((row) => {
+        const keys = row.keys || [];
+        
+        return {
+          date: keys[0], // First dimension should be date
+          source: SOURCES.GSC,
+          query: dimensions.includes('query') ? keys[dimensions.indexOf('query')] || 'Total' : 'Total',
+          url: dimensions.includes('page') ? keys[dimensions.indexOf('page')] : undefined,
+          clicks: row.clicks || 0,
+          impressions: row.impressions || 0,
+          ctr: row.ctr || 0,
+          position: row.position || 0,
+          volume: undefined,
+          difficulty: undefined,
+          cpc: undefined,
+          traffic: undefined,
+        };
+      });
+    } catch (error) {
+      console.error('GSC Time Series Error:', error);
+      throw new Error('Failed to get time series data from Google Search Console');
+    }
+  }
+
+  /**
+   * Clear stored credentials
+   */
+  clearCredentials(): void {
+    this.auth.setCredentials({});
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('gsc_tokens');
+    }
+  }
+}
+
+// Singleton instance
+let gscClient: GSCClient | null = null;
+
+export function getGSCClient(): GSCClient {
+  if (!gscClient) {
+    gscClient = new GSCClient();
+  }
+  return gscClient;
+}
