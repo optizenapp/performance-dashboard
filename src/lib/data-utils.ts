@@ -107,9 +107,12 @@ export function prepareChartData(
   metric: string,
   groupBy: 'date' | 'query' | 'source' = 'date'
 ): ChartDataPoint[] {
+  // For position metric, only use GSC data (since it's "Average Position")
+  const filteredData = metric === 'position' ? data.filter(item => item.source === SOURCES.GSC) : data;
+  
   const grouped = new Map<string, { value: number; count: number; source?: string }>();
 
-  data.forEach(item => {
+  filteredData.forEach(item => {
     let key: string;
     let value: number | undefined;
 

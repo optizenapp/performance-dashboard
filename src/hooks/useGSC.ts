@@ -1,5 +1,6 @@
 import { useState, useCallback } from 'react';
 import { NormalizedMetric } from '@/lib/types';
+import { normalizeGSCData } from '@/lib/data-utils';
 
 interface GSCState {
   isAuthenticated: boolean;
@@ -231,7 +232,17 @@ export function useGSC() {
       }
       
       setState(prev => ({ ...prev, isLoading: false, error: null }));
-      return result.data;
+      
+      // Normalize GSC data to the common format
+      const normalizedData = normalizeGSCData(result.data);
+      
+      console.log('Normalized GSC Data:', {
+        rawCount: result.data.length,
+        normalizedCount: normalizedData.length,
+        sampleNormalized: normalizedData.slice(0, 3)
+      });
+      
+      return normalizedData;
     } catch (error) {
       setError(error instanceof Error ? error.message : 'Failed to fetch data');
       throw error;

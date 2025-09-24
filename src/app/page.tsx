@@ -121,7 +121,8 @@ export default function Dashboard() {
       stats.totalVolume += item.volume || 0;
       stats.totalTraffic += item.traffic || 0;
 
-      if (item.position && item.position > 0) {
+      // Only use GSC data for position calculation (Average Position)
+      if (item.position && item.position > 0 && item.source === SOURCES.GSC) {
         positionSum += item.position;
         positionCount++;
       }
