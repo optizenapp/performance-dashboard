@@ -265,7 +265,18 @@ export default function Dashboard() {
     let positionSum = 0;
     let positionCount = 0;
 
-    sectionFilteredData.quickView.forEach(item => {
+    console.log('🔍 Quick Overview position debugging:', {
+      totalDataPoints: sectionFilteredData.quickView.length,
+      gscDataPoints: sectionFilteredData.quickView.filter(item => item.source === SOURCES.GSC).length,
+      sampleGSCData: sectionFilteredData.quickView.filter(item => item.source === SOURCES.GSC).slice(0, 3).map(item => ({
+        date: item.date,
+        source: item.source,
+        position: item.position,
+        query: item.query?.substring(0, 20)
+      }))
+    });
+
+    sectionFilteredData.quickView.forEach((item, index) => {
       stats.totalClicks += item.clicks || 0;
       stats.totalImpressions += item.impressions || 0;
       stats.totalVolume += item.volume || 0;
@@ -275,6 +286,25 @@ export default function Dashboard() {
       if (item.position && item.position > 0 && item.source === SOURCES.GSC) {
         positionSum += item.position;
         positionCount++;
+        
+        // Debug first few position entries
+        if (index < 5) {
+          console.log(`📊 Position ${positionCount}:`, {
+            position: item.position,
+            query: item.query?.substring(0, 20),
+            date: item.date,
+            runningSum: positionSum,
+            runningAvg: (positionSum / positionCount).toFixed(2)
+          });
+        }
+      } else if (item.source === SOURCES.GSC && index < 5) {
+        console.log(`⚠️ GSC item without valid position:`, {
+          position: item.position,
+          query: item.query?.substring(0, 20),
+          date: item.date,
+          hasPosition: !!item.position,
+          positionValue: item.position
+        });
       }
     });
 
@@ -295,6 +325,81 @@ export default function Dashboard() {
 
     return stats;
   }, [sectionFilteredData.quickView, sectionFilters.quickView.dateRange]);
+
+  // Comparison stats for Quick Overview (when comparison is enabled)
+  const quickViewComparisonStats = useMemo(() => {
+    if (!sectionFilters.quickView.enableComparison || !sectionFilters.quickView.comparisonDateRange) {
+      return null;
+    }
+
+    console.log('🔍 Calculating Quick Overview comparison stats for:', {
+      primaryRange: `${sectionFilters.quickView.dateRange.startDate} to ${sectionFilters.quickView.dateRange.endDate}`,
+      comparisonRange: `${sectionFilters.quickView.comparisonDateRange.startDate} to ${sectionFilters.quickView.comparisonDateRange.endDate}`
+    });
+
+    // Filter data for comparison period
+    const comparisonStartDate = new Date(sectionFilters.quickView.comparisonDateRange.startDate);
+    const comparisonEndDate = new Date(sectionFilters.quickView.comparisonDateRange.endDate);
+    
+    const comparisonData = data.filter(item => {
+      const itemDate = new Date(item.date);
+      const dateMatch = itemDate >= comparisonStartDate && itemDate <= comparisonEndDate;
+      const sourceMatch = filters.sources.includes(item.source);
+      return dateMatch && sourceMatch;
+    });
+
+    console.log('📊 Comparison data points:', comparisonData.length);
+
+    const comparisonStats = {
+      totalClicks: 0,
+      totalImpressions: 0,
+      avgCTR: 0,
+      avgPosition: 0,
+    };
+
+    if (comparisonData.length === 0) {
+      console.log('⚠️ No comparison data for selected range');
+      return { current: quickViewStats, previous: comparisonStats, changes: null };
+    }
+
+    let positionSum = 0;
+    let positionCount = 0;
+
+    comparisonData.forEach(item => {
+      comparisonStats.totalClicks += item.clicks || 0;
+      comparisonStats.totalImpressions += item.impressions || 0;
+
+      // Only use GSC data for position calculation
+      if (item.position && item.position > 0 && item.source === SOURCES.GSC) {
+        positionSum += item.position;
+        positionCount++;
+      }
+    });
+
+    // Calculate comparison period metrics
+    comparisonStats.avgPosition = positionCount > 0 ? positionSum / positionCount : 0;
+    comparisonStats.avgCTR = comparisonStats.totalImpressions > 0 ? comparisonStats.totalClicks / comparisonStats.totalImpressions : 0;
+
+    // Calculate percentage changes
+    const changes = {
+      clicksChange: comparisonStats.totalClicks > 0 ? 
+        Math.round(((quickViewStats.totalClicks - comparisonStats.totalClicks) / comparisonStats.totalClicks) * 100) : 0,
+      impressionsChange: comparisonStats.totalImpressions > 0 ? 
+        Math.round(((quickViewStats.totalImpressions - comparisonStats.totalImpressions) / comparisonStats.totalImpressions) * 100) : 0,
+      ctrChange: comparisonStats.avgCTR > 0 ? 
+        Math.round(((quickViewStats.avgCTR - comparisonStats.avgCTR) / comparisonStats.avgCTR) * 100) : 0,
+      positionChange: comparisonStats.avgPosition > 0 ? 
+        Math.round(((comparisonStats.avgPosition - quickViewStats.avgPosition) / comparisonStats.avgPosition) * 100) : 0, // Note: lower position is better, so we flip the calculation
+    };
+
+    console.log('📈 Comparison results:', {
+      current: quickViewStats,
+      previous: comparisonStats,
+      changes
+    });
+
+    return { current: quickViewStats, previous: comparisonStats, changes };
+  }, [quickViewStats, sectionFilters.quickView.enableComparison, sectionFilters.quickView.comparisonDateRange, data, filters.sources]);
 
   const tableData = prepareTableData(sectionFilteredData.table, sectionFilters.table.enableComparison);
   
@@ -644,13 +749,35 @@ search console api,https://example.com/api-docs,12,500,25,3.20,80,2024-01-01,60,
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">Total Clicks</CardTitle>
-                <TrendingUp className="h-4 w-4 text-muted-foreground" />
+                <div className="flex items-center space-x-1">
+                  {quickViewComparisonStats?.changes && (
+                    <div className={`text-xs font-medium ${
+                      quickViewComparisonStats.changes.clicksChange > 0 ? 'text-green-600' : 
+                      quickViewComparisonStats.changes.clicksChange < 0 ? 'text-red-600' : 
+                      'text-gray-500'
+                    }`}>
+                      {quickViewComparisonStats.changes.clicksChange > 0 ? '+' : ''}{quickViewComparisonStats.changes.clicksChange}%
+                    </div>
+                  )}
+                  <TrendingUp className="h-4 w-4 text-muted-foreground" />
+                </div>
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">
-                  {quickViewStats.totalClicks.toLocaleString()}
-                </div>
-                <p className="text-xs text-muted-foreground">
+                {quickViewComparisonStats?.changes ? (
+                  <div>
+                    <div className="text-lg font-bold text-gray-700 dark:text-gray-300">
+                      {quickViewStats.totalClicks.toLocaleString()} vs {quickViewComparisonStats.previous.totalClicks.toLocaleString()}
+                    </div>
+                    <div className="text-xs text-muted-foreground mt-1">
+                      Current vs Previous period
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-2xl font-bold">
+                    {quickViewStats.totalClicks.toLocaleString()}
+                  </div>
+                )}
+                <p className="text-xs text-muted-foreground mt-2">
                   From {sectionFilteredData.quickView.length} data points
                 </p>
               </CardContent>
@@ -659,13 +786,35 @@ search console api,https://example.com/api-docs,12,500,25,3.20,80,2024-01-01,60,
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">Impressions</CardTitle>
-                <TrendingUp className="h-4 w-4 text-muted-foreground" />
+                <div className="flex items-center space-x-1">
+                  {quickViewComparisonStats?.changes && (
+                    <div className={`text-xs font-medium ${
+                      quickViewComparisonStats.changes.impressionsChange > 0 ? 'text-green-600' : 
+                      quickViewComparisonStats.changes.impressionsChange < 0 ? 'text-red-600' : 
+                      'text-gray-500'
+                    }`}>
+                      {quickViewComparisonStats.changes.impressionsChange > 0 ? '+' : ''}{quickViewComparisonStats.changes.impressionsChange}%
+                    </div>
+                  )}
+                  <TrendingUp className="h-4 w-4 text-muted-foreground" />
+                </div>
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">
-                  {quickViewStats.totalImpressions.toLocaleString()}
-                </div>
-                <p className="text-xs text-muted-foreground">
+                {quickViewComparisonStats?.changes ? (
+                  <div>
+                    <div className="text-lg font-bold text-gray-700 dark:text-gray-300">
+                      {quickViewStats.totalImpressions.toLocaleString()} vs {quickViewComparisonStats.previous.totalImpressions.toLocaleString()}
+                    </div>
+                    <div className="text-xs text-muted-foreground mt-1">
+                      Current vs Previous period
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-2xl font-bold">
+                    {quickViewStats.totalImpressions.toLocaleString()}
+                  </div>
+                )}
+                <p className="text-xs text-muted-foreground mt-2">
                   From GSC & Ahrefs data
                 </p>
               </CardContent>
@@ -674,13 +823,35 @@ search console api,https://example.com/api-docs,12,500,25,3.20,80,2024-01-01,60,
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">Avg. CTR</CardTitle>
-                <TrendingUp className="h-4 w-4 text-muted-foreground" />
+                <div className="flex items-center space-x-1">
+                  {quickViewComparisonStats?.changes && (
+                    <div className={`text-xs font-medium ${
+                      quickViewComparisonStats.changes.ctrChange > 0 ? 'text-green-600' : 
+                      quickViewComparisonStats.changes.ctrChange < 0 ? 'text-red-600' : 
+                      'text-gray-500'
+                    }`}>
+                      {quickViewComparisonStats.changes.ctrChange > 0 ? '+' : ''}{quickViewComparisonStats.changes.ctrChange}%
+                    </div>
+                  )}
+                  <TrendingUp className="h-4 w-4 text-muted-foreground" />
+                </div>
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">
-                  {(quickViewStats.avgCTR * 100).toFixed(1)}%
-                </div>
-                <p className="text-xs text-muted-foreground">
+                {quickViewComparisonStats?.changes ? (
+                  <div>
+                    <div className="text-lg font-bold text-gray-700 dark:text-gray-300">
+                      {(quickViewStats.avgCTR * 100).toFixed(1)}% vs {(quickViewComparisonStats.previous.avgCTR * 100).toFixed(1)}%
+                    </div>
+                    <div className="text-xs text-muted-foreground mt-1">
+                      Current vs Previous period
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-2xl font-bold">
+                    {(quickViewStats.avgCTR * 100).toFixed(1)}%
+                  </div>
+                )}
+                <p className="text-xs text-muted-foreground mt-2">
                   Click-through rate
                 </p>
               </CardContent>
@@ -689,13 +860,35 @@ search console api,https://example.com/api-docs,12,500,25,3.20,80,2024-01-01,60,
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">Avg. Position</CardTitle>
-                <TrendingUp className="h-4 w-4 text-muted-foreground" />
+                <div className="flex items-center space-x-1">
+                  {quickViewComparisonStats?.changes && (
+                    <div className={`text-xs font-medium ${
+                      quickViewComparisonStats.changes.positionChange > 0 ? 'text-green-600' : 
+                      quickViewComparisonStats.changes.positionChange < 0 ? 'text-red-600' : 
+                      'text-gray-500'
+                    }`}>
+                      {quickViewComparisonStats.changes.positionChange > 0 ? '+' : ''}{quickViewComparisonStats.changes.positionChange}%
+                    </div>
+                  )}
+                  <TrendingUp className="h-4 w-4 text-muted-foreground" />
+                </div>
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">
-                  {quickViewStats.avgPosition > 0 ? quickViewStats.avgPosition.toFixed(1) : 'N/A'}
-                </div>
-                <p className="text-xs text-muted-foreground">
+                {quickViewComparisonStats?.changes && quickViewStats.avgPosition > 0 ? (
+                  <div>
+                    <div className="text-lg font-bold text-gray-700 dark:text-gray-300">
+                      {quickViewStats.avgPosition.toFixed(1)} vs {quickViewComparisonStats.previous.avgPosition.toFixed(1)}
+                    </div>
+                    <div className="text-xs text-muted-foreground mt-1">
+                      Current vs Previous period
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-2xl font-bold">
+                    {quickViewStats.avgPosition > 0 ? quickViewStats.avgPosition.toFixed(1) : 'N/A'}
+                  </div>
+                )}
+                <p className="text-xs text-muted-foreground mt-2">
                   Average ranking position
                 </p>
               </CardContent>
