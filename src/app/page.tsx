@@ -763,7 +763,7 @@ search console api,https://example.com/api-docs,12,500,25,3.20,80,2024-01-01,60,
                 </div>
               </CardHeader>
               <CardContent>
-                {quickViewComparisonStats?.changes ? (
+                {sectionFilters.quickView.enableComparison && quickViewComparisonStats?.changes ? (
                   <div>
                     <div className="text-lg font-bold text-gray-700 dark:text-gray-300">
                       {quickViewStats.totalClicks.toLocaleString()} vs {quickViewComparisonStats.previous.totalClicks.toLocaleString()}
@@ -800,7 +800,7 @@ search console api,https://example.com/api-docs,12,500,25,3.20,80,2024-01-01,60,
                 </div>
               </CardHeader>
               <CardContent>
-                {quickViewComparisonStats?.changes ? (
+                {sectionFilters.quickView.enableComparison && quickViewComparisonStats?.changes ? (
                   <div>
                     <div className="text-lg font-bold text-gray-700 dark:text-gray-300">
                       {quickViewStats.totalImpressions.toLocaleString()} vs {quickViewComparisonStats.previous.totalImpressions.toLocaleString()}
@@ -837,7 +837,7 @@ search console api,https://example.com/api-docs,12,500,25,3.20,80,2024-01-01,60,
                 </div>
               </CardHeader>
               <CardContent>
-                {quickViewComparisonStats?.changes ? (
+                {sectionFilters.quickView.enableComparison && quickViewComparisonStats?.changes ? (
                   <div>
                     <div className="text-lg font-bold text-gray-700 dark:text-gray-300">
                       {(quickViewStats.avgCTR * 100).toFixed(1)}% vs {(quickViewComparisonStats.previous.avgCTR * 100).toFixed(1)}%
@@ -874,7 +874,7 @@ search console api,https://example.com/api-docs,12,500,25,3.20,80,2024-01-01,60,
                 </div>
               </CardHeader>
               <CardContent>
-                {quickViewComparisonStats?.changes && quickViewStats.avgPosition > 0 ? (
+                {sectionFilters.quickView.enableComparison && quickViewComparisonStats?.changes && quickViewStats.avgPosition > 0 ? (
                   <div>
                     <div className="text-lg font-bold text-gray-700 dark:text-gray-300">
                       {quickViewStats.avgPosition.toFixed(1)} vs {quickViewComparisonStats.previous.avgPosition.toFixed(1)}
