@@ -26,7 +26,7 @@ export default function Dashboard() {
     if (selectedChartMetrics.includes('volume') || selectedChartMetrics.includes('traffic')) {
       setSelectedChartMetrics(prev => prev.filter(metric => metric !== 'volume' && metric !== 'traffic'));
     }
-  }, [selectedChartMetrics]);
+  }, []); // Remove dependency to prevent infinite loop
   const [filters, setFilters] = useState<FilterOptions>({
     dateRange: getDateRangePreset('last_30_days'),
     metrics: ['clicks', 'impressions', 'ctr', 'position'],

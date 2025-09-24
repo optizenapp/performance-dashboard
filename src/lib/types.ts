@@ -132,7 +132,12 @@ export const TableRowSchema = z.object({
   position: z.number().optional(),
   volume: z.number().optional(),
   source: z.string(),
-  change: z.number().optional(), // percentage change from previous period
+  change: z.number().optional(), // traffic change from Ahrefs (only when comparison enabled)
+  // Additional comparison fields for potential future use
+  clicksChange: z.number().optional(),
+  impressionsChange: z.number().optional(),
+  ctrChange: z.number().optional(),
+  positionChange: z.number().optional(),
 });
 
 // Export types

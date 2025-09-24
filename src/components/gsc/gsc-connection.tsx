@@ -143,9 +143,13 @@ export function GSCConnection({ onDataFetch, dateRange: initialDateRange }: GSCC
             {/* Site Selection */}
             <div className="space-y-2">
               <label className="text-sm font-medium">Select Property:</label>
-              <Select value={selectedSite || ''} onValueChange={selectSite}>
+              <Select value={selectedSite || ''} onValueChange={selectSite} disabled={isLoading || sites.length === 0}>
                 <SelectTrigger>
-                  <SelectValue placeholder="Choose a property" />
+                  <SelectValue placeholder={
+                    isLoading ? "Loading properties..." : 
+                    sites.length === 0 ? "No properties found" : 
+                    "Choose a property"
+                  } />
                 </SelectTrigger>
                 <SelectContent>
                   {sites.map((site) => (
@@ -155,6 +159,11 @@ export function GSCConnection({ onDataFetch, dateRange: initialDateRange }: GSCC
                   ))}
                 </SelectContent>
               </Select>
+              {sites.length === 0 && !isLoading && (
+                <p className="text-sm text-gray-500">
+                  No Search Console properties found. Make sure you have access to at least one verified property.
+                </p>
+              )}
             </div>
 
             {/* Date Range Selection */}

@@ -179,91 +179,88 @@ export function prepareChartData(
  * Convert normalized data to table rows
  */
 export function prepareTableData(data: NormalizedMetric[], enableComparison = false): TableRow[] {
-  const grouped = new Map<string, {
-    clicks: number;
-    impressions: number;
-    ctr: number;
-    position: number;
-    volume: number;
-    traffic: number;
-    url?: string;
-    sources: Set<string>;
-    ctrCount: number;
-    positionCount: number;
-    trafficChange?: number;
-  }>();
+  if (data.length === 0) return [];
 
+  // Group data by query and URL
+  const grouped = new Map<string, NormalizedMetric[]>();
+  
   data.forEach(item => {
-    // Group by query and URL to avoid over-aggregation
     const key = `${item.query}|${item.url || 'no-url'}`;
-    const existing = grouped.get(key) || {
-      clicks: 0,
-      impressions: 0,
-      ctr: 0,
-      position: 0,
-      volume: 0,
-      traffic: 0,
-      url: item.url,
-      sources: new Set<string>(),
-      ctrCount: 0,
-      positionCount: 0,
-    };
-
-    // Track which sources have data for this query-URL combination
-    existing.sources.add(item.source);
-
-    // Aggregate metrics
-    existing.clicks += item.clicks || 0;
-    existing.impressions += item.impressions || 0;
-    existing.volume += item.volume || 0;
-    existing.traffic += item.traffic || 0;
-    
-    // Average for CTR and position (only if values exist)
-    if (item.ctr !== undefined && item.ctr > 0) {
-      existing.ctr = (existing.ctr * existing.ctrCount + item.ctr) / (existing.ctrCount + 1);
-      existing.ctrCount++;
+    if (!grouped.has(key)) {
+      grouped.set(key, []);
     }
-    if (item.position !== undefined && item.position > 0) {
-      existing.position = (existing.position * existing.positionCount + item.position) / (existing.positionCount + 1);
-      existing.positionCount++;
-    }
-
-    // Calculate traffic change for Ahrefs comparison data
-    if (enableComparison && item.source === 'ahrefs') {
-      // Check if we have Ahrefs comparison data
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const ahrefsData = item as any;
-      if (ahrefsData.trafficChange !== undefined) {
-        existing.trafficChange = ahrefsData.trafficChange;
-      }
-    }
-    
-    grouped.set(key, existing);
+    grouped.get(key)!.push(item);
   });
 
-  return Array.from(grouped.entries()).map(([key, data]) => {
-    // Determine source display
-    const sourcesArray = Array.from(data.sources);
+  return Array.from(grouped.entries()).map(([key, items]) => {
+    const query = key.split('|')[0];
+    const url = items[0].url || undefined;
+    
+    // Get sources for this query-URL combination
+    const sources = new Set(items.map(item => item.source));
     let sourceDisplay = '';
-    if (sourcesArray.length > 1) {
+    if (sources.size > 1) {
       sourceDisplay = 'Both';
-    } else if (sourcesArray.includes('gsc')) {
+    } else if (sources.has('gsc')) {
       sourceDisplay = 'GSC';
-    } else if (sourcesArray.includes('ahrefs')) {
+    } else if (sources.has('ahrefs')) {
       sourceDisplay = 'Ahrefs';
     }
 
-    return {
-      query: key.split('|')[0], // Extract query from compound key
-      url: data.url || undefined,
-      clicks: data.clicks > 0 ? data.clicks : undefined,
-      impressions: data.impressions > 0 ? data.impressions : undefined,
-      ctr: data.ctrCount > 0 ? Math.round(data.ctr * 10000) / 100 : undefined, // Convert to percentage
-      position: data.positionCount > 0 ? Math.round(data.position * 10) / 10 : undefined,
-      volume: data.volume > 0 ? data.volume : undefined,
-      source: sourceDisplay,
-      change: enableComparison && data.trafficChange !== undefined ? data.trafficChange : undefined,
-    };
+    if (enableComparison) {
+      // For comparison mode: show earliest vs latest data
+      const sortedByDate = items.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+      const earliest = sortedByDate[0];
+      const latest = sortedByDate[sortedByDate.length - 1];
+      
+      // Calculate percentage changes
+      const clicksChange = earliest.clicks && latest.clicks ? 
+        Math.round(((latest.clicks - earliest.clicks) / earliest.clicks) * 100) : undefined;
+      const impressionsChange = earliest.impressions && latest.impressions ? 
+        Math.round(((latest.impressions - earliest.impressions) / earliest.impressions) * 100) : undefined;
+      const ctrChange = earliest.ctr && latest.ctr ? 
+        Math.round(((latest.ctr - earliest.ctr) / earliest.ctr) * 100) : undefined;
+      const positionChange = earliest.position && latest.position ? 
+        Math.round(((earliest.position - latest.position) / earliest.position) * 100) : undefined; // Lower is better for position
+      
+      // Get traffic change from Ahrefs comparison data
+      const ahrefsItem = items.find(item => item.source === 'ahrefs');
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const trafficChange = ahrefsItem ? (ahrefsItem as any).trafficChange : undefined;
+
+      return {
+        query,
+        url,
+        clicks: latest.clicks || undefined,
+        impressions: latest.impressions || undefined,
+        ctr: latest.ctr ? Math.round(latest.ctr * 10000) / 100 : undefined, // Convert to percentage
+        position: latest.position ? Math.round(latest.position * 10) / 10 : undefined,
+        volume: latest.volume || undefined,
+        source: sourceDisplay,
+        change: trafficChange || undefined, // Only show Ahrefs traffic change
+        // Additional comparison data (could be used for expanded view)
+        clicksChange,
+        impressionsChange,
+        ctrChange,
+        positionChange,
+      };
+    } else {
+      // For non-comparison mode: use most recent data
+      const sortedByDate = items.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+      const mostRecent = sortedByDate[0];
+      
+      return {
+        query,
+        url,
+        clicks: mostRecent.clicks || undefined,
+        impressions: mostRecent.impressions || undefined,
+        ctr: mostRecent.ctr ? Math.round(mostRecent.ctr * 10000) / 100 : undefined, // Convert to percentage
+        position: mostRecent.position ? Math.round(mostRecent.position * 10) / 10 : undefined,
+        volume: mostRecent.volume || undefined,
+        source: sourceDisplay,
+        change: undefined, // No change column in non-comparison mode
+      };
+    }
   }).sort((a, b) => (b.clicks || 0) - (a.clicks || 0));
 }
 

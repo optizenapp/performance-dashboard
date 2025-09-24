@@ -234,7 +234,7 @@ export function DataTable({
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className="w-[300px]">
+                <TableHead className="w-[250px]">
                   <Button
                     variant="ghost"
                     onClick={() => handleSort('query')}
@@ -242,6 +242,16 @@ export function DataTable({
                   >
                     Query
                     {getSortIcon('query')}
+                  </Button>
+                </TableHead>
+                <TableHead className="w-[200px]">
+                  <Button
+                    variant="ghost"
+                    onClick={() => handleSort('url')}
+                    className="h-auto p-0 font-semibold"
+                  >
+                    URL
+                    {getSortIcon('url')}
                   </Button>
                 </TableHead>
                 <TableHead>
@@ -302,15 +312,25 @@ export function DataTable({
               {paginatedData.map((row, index) => (
                 <TableRow key={`${row.query}-${index}`}>
                   <TableCell className="font-medium">
-                    <div className="space-y-1">
-                      <div className="font-medium">{row.query}</div>
-                      {row.url && (
-                        <div className="flex items-center space-x-1 text-xs text-gray-500">
-                          <ExternalLink className="h-3 w-3" />
-                          <span className="truncate max-w-[250px]">{row.url}</span>
-                        </div>
-                      )}
-                    </div>
+                    {row.query}
+                  </TableCell>
+                  <TableCell>
+                    {row.url ? (
+                      <a
+                        href={row.url.startsWith('http') ? row.url : `https://${row.url}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center space-x-1 text-sm text-blue-600 hover:text-blue-800 hover:underline"
+                        title={row.url}
+                      >
+                        <ExternalLink className="h-3 w-3" />
+                        <span className="truncate max-w-[180px]">
+                          {row.url}
+                        </span>
+                      </a>
+                    ) : (
+                      <span className="text-gray-400 text-sm">N/A</span>
+                    )}
                   </TableCell>
                   <TableCell>
                     {row.clicks !== undefined ? formatMetricValue(row.clicks, 'clicks') : '-'}
