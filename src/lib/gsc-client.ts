@@ -136,7 +136,15 @@ export class GSCClient {
         startDate,
         endDate,
         dimensions,
-        rowLimit
+        rowLimit,
+        dateRangeInfo: {
+          startDateParsed: new Date(startDate).toISOString(),
+          endDateParsed: new Date(endDate).toISOString(),
+          isStartFuture: new Date(startDate) > new Date(),
+          isEndFuture: new Date(endDate) > new Date(),
+          daysSinceStart: Math.floor((new Date().getTime() - new Date(startDate).getTime()) / (1000 * 60 * 60 * 24)),
+          daysSinceEnd: Math.floor((new Date().getTime() - new Date(endDate).getTime()) / (1000 * 60 * 60 * 24))
+        }
       });
 
       const response = await this.searchconsole.searchanalytics.query(request);
@@ -152,16 +160,27 @@ export class GSCClient {
       });
 
       if (!data.rows || data.rows.length === 0) {
+        const now = new Date();
+        const start = new Date(startDate);
+        const end = new Date(endDate);
+        const threeDaysAgo = new Date(now.getTime() - 3 * 24 * 60 * 60 * 1000);
+        
         console.warn('GSC returned no data. Possible reasons:', {
           siteUrl,
           dateRange: `${startDate} to ${endDate}`,
           dimensions,
           possibleIssues: [
-            'Date range too recent (GSC has 2-3 day delay)',
+            start > threeDaysAgo ? 'Date range too recent (GSC has 2-3 day delay)' : null,
+            start > now ? 'Start date is in the future' : null,
+            end > now ? 'End date is in the future' : null,
             'No data available for this site in the date range',
             'Site URL format incorrect',
             'User lacks permission for this property'
-          ]
+          ].filter(Boolean),
+          recommendations: {
+            suggestedEndDate: threeDaysAgo.toISOString().split('T')[0],
+            suggestedStartDate: new Date(threeDaysAgo.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+          }
         });
         return [];
       }
@@ -170,8 +189,21 @@ export class GSCClient {
       return data.rows.map((row) => {
         const keys = row.keys || [];
         
+        // For aggregated queries, GSC doesn't return individual dates. Since this is aggregated data
+        // representing the entire date range, we'll use the end date to ensure it appears in filters.
+        // This represents "data through this end date" which is more accurate for aggregated metrics.
+        
+        // Log the date assignment for the first row only
+        if (data.rows.indexOf(row) === 0) {
+          console.log('📅 GSC Date Assignment:', {
+            originalRange: `${startDate} to ${endDate}`,
+            assignedDate: endDate,
+            reason: 'Using end date for aggregated data to ensure visibility in date filters'
+          });
+        }
+        
         return {
-          date: startDate, // GSC doesn't return date in aggregated queries, use start date
+          date: endDate, // Use end date for aggregated data representing the full period
           query: dimensions.includes('query') ? keys[dimensions.indexOf('query')] : undefined,
           page: dimensions.includes('page') ? keys[dimensions.indexOf('page')] : undefined,
           country: dimensions.includes('country') ? keys[dimensions.indexOf('country')] : undefined,

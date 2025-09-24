@@ -64,13 +64,36 @@ export default function Dashboard() {
 
   // Calculate filtered data
   const filteredData = useMemo(() => {
+    console.log('🔍 Filtering data with current filters:', {
+      totalItems: data.length,
+      dateRange: filters.dateRange,
+      gscItemsWithDates: data.filter(item => item.source === SOURCES.GSC).map(item => ({
+        date: item.date,
+        query: item.query?.substring(0, 20) + '...'
+      })).slice(0, 5)
+    });
+
     return data.filter(item => {
       // Date range filter
       const itemDate = new Date(item.date);
       const startDate = new Date(filters.dateRange.startDate);
       const endDate = new Date(filters.dateRange.endDate);
       
-      if (itemDate < startDate || itemDate > endDate) return false;
+      const dateMatch = itemDate >= startDate && itemDate <= endDate;
+      
+      if (!dateMatch) {
+        if (data.indexOf(item) < 5) {
+          console.log('❌ Date filter failed for item:', {
+            itemDate: item.date,
+            itemDateParsed: itemDate.toISOString(),
+            startDate: filters.dateRange.startDate,
+            endDate: filters.dateRange.endDate,
+            query: item.query?.substring(0, 20),
+            source: item.source
+          });
+        }
+        return false;
+      }
       
       // Query filter - if queries are selected, item must match at least one
       if (filters.queries && filters.queries.length > 0) {
@@ -89,8 +112,25 @@ export default function Dashboard() {
       }
       
       // Source filter
-      if (!filters.sources.includes(item.source)) {
+      const sourceMatch = filters.sources.includes(item.source);
+      if (!sourceMatch) {
+        if (data.indexOf(item) < 5) {
+          console.log('❌ Source filter failed for item:', {
+            itemSource: item.source,
+            allowedSources: filters.sources,
+            query: item.query?.substring(0, 20),
+          });
+        }
         return false;
+      }
+      
+      // If we get here, all filters passed
+      if (data.indexOf(item) < 5) {
+        console.log('✅ Item passed all filters:', {
+          date: item.date,
+          source: item.source,
+          query: item.query?.substring(0, 20)
+        });
       }
       
       return true;
