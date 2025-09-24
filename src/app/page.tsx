@@ -99,6 +99,15 @@ export default function Dashboard() {
 
   // Calculate summary statistics from filtered data
   const summaryStats = useMemo(() => {
+    console.log('🔍 Calculating summaryStats:', {
+      dataLength: data.length,
+      filteredDataLength: filteredData.length,
+      gscCount: data.filter(item => item.source === SOURCES.GSC).length,
+      ahrefsCount: data.filter(item => item.source === SOURCES.AHREFS).length,
+      dataSample: data.slice(0, 3),
+      filteredSample: filteredData.slice(0, 3)
+    });
+
     const stats = {
       totalClicks: 0,
       totalImpressions: 0,
@@ -108,7 +117,10 @@ export default function Dashboard() {
       totalTraffic: 0,
     };
 
-    if (filteredData.length === 0) return stats;
+    if (filteredData.length === 0) {
+      console.log('⚠️ No filtered data available for summary stats');
+      return stats;
+    }
 
     let positionSum = 0;
     let positionCount = 0;
@@ -219,10 +231,24 @@ export default function Dashboard() {
   };
 
   const handleGSCData = async (gscData: NormalizedMetric[]) => {
+    console.log('📊 handleGSCData called with:', {
+      gscDataCount: gscData.length,
+      gscSample: gscData.slice(0, 3),
+      currentDataCount: data.length,
+      currentAhrefsCount: data.filter(item => item.source === SOURCES.AHREFS).length
+    });
+
     try {
       // Replace existing GSC data and merge with Ahrefs data
       const ahrefsData = data.filter(item => item.source === SOURCES.AHREFS);
       const newData = [...gscData, ...ahrefsData];
+      
+      console.log('📊 Setting new data:', {
+        gscCount: gscData.length,
+        ahrefsCount: ahrefsData.length,
+        totalCount: newData.length,
+        newDataSample: newData.slice(0, 3)
+      });
       
       setData(newData);
       

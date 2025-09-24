@@ -14,21 +14,33 @@ import {
  * Normalize Google Search Console data to common format
  */
 export function normalizeGSCData(gscData: GSCMetric[]): NormalizedMetric[] {
-  return gscData.map(item => ({
+  console.log('Normalizing GSC data:', {
+    inputCount: gscData.length,
+    sampleInput: gscData.slice(0, 3),
+  });
+
+  const normalized = gscData.map(item => ({
     date: item.date,
     source: SOURCES.GSC,
     query: item.query || '',
     url: item.page,
-    clicks: item.clicks,
-    impressions: item.impressions,
-    ctr: item.ctr,
-    position: item.position, // Average position from GSC
+    clicks: item.clicks || 0,
+    impressions: item.impressions || 0,
+    ctr: item.ctr || 0,
+    position: item.position || 0, // Average position from GSC
     volume: undefined,
     difficulty: undefined,
     cpc: undefined,
     traffic: undefined,
     serpFeatures: undefined, // GSC doesn't have SERP features data
   }));
+
+  console.log('Normalized GSC result:', {
+    outputCount: normalized.length,
+    sampleOutput: normalized.slice(0, 3),
+  });
+
+  return normalized;
 }
 
 /**

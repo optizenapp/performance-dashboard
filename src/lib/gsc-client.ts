@@ -131,10 +131,38 @@ export class GSCClient {
         },
       };
 
+      console.log('GSC API Request:', {
+        siteUrl,
+        startDate,
+        endDate,
+        dimensions,
+        rowLimit
+      });
+
       const response = await this.searchconsole.searchanalytics.query(request);
       const data = response.data;
 
+      console.log('GSC API Response:', {
+        siteUrl,
+        responseReceived: !!response,
+        dataReceived: !!data,
+        rowCount: data?.rows?.length || 0,
+        firstRow: data?.rows?.[0],
+        responseStatus: response.status
+      });
+
       if (!data.rows || data.rows.length === 0) {
+        console.warn('GSC returned no data. Possible reasons:', {
+          siteUrl,
+          dateRange: `${startDate} to ${endDate}`,
+          dimensions,
+          possibleIssues: [
+            'Date range too recent (GSC has 2-3 day delay)',
+            'No data available for this site in the date range',
+            'Site URL format incorrect',
+            'User lacks permission for this property'
+          ]
+        });
         return [];
       }
 
@@ -168,9 +196,8 @@ export class GSCClient {
     startDate: string,
     endDate: string,
     dimensions: string[] = ['query', 'page']
-  ): Promise<NormalizedMetric[]> {
-    const gscData = await this.querySearchConsole(siteUrl, startDate, endDate, dimensions);
-    return normalizeGSCData(gscData);
+  ): Promise<GSCMetric[]> {
+    return await this.querySearchConsole(siteUrl, startDate, endDate, dimensions);
   }
 
   /**
@@ -181,7 +208,7 @@ export class GSCClient {
     startDate: string,
     endDate: string,
     dimensions: string[] = ['date']
-  ): Promise<NormalizedMetric[]> {
+  ): Promise<GSCMetric[]> {
     try {
       // For time series, we need to include 'date' dimension
       if (!dimensions.includes('date')) {
@@ -206,23 +233,20 @@ export class GSCClient {
         return [];
       }
 
-      // Transform time series data
+      // Transform time series data to GSCMetric format
       return data.rows.map((row) => {
         const keys = row.keys || [];
         
         return {
           date: keys[0], // First dimension should be date
-          source: SOURCES.GSC,
           query: dimensions.includes('query') ? keys[dimensions.indexOf('query')] || 'Total' : 'Total',
-          url: dimensions.includes('page') ? keys[dimensions.indexOf('page')] : undefined,
+          page: dimensions.includes('page') ? keys[dimensions.indexOf('page')] : undefined,
+          country: dimensions.includes('country') ? keys[dimensions.indexOf('country')] : undefined,
+          device: dimensions.includes('device') ? keys[dimensions.indexOf('device')] : undefined,
           clicks: row.clicks || 0,
           impressions: row.impressions || 0,
           ctr: row.ctr || 0,
           position: row.position || 0,
-          volume: undefined,
-          difficulty: undefined,
-          cpc: undefined,
-          traffic: undefined,
         };
       });
     } catch (error) {
