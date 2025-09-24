@@ -10,15 +10,23 @@ export async function GET(request: NextRequest) {
     // Handle OAuth errors
     if (error) {
       console.error('OAuth error:', error);
-      return NextResponse.redirect(
-        new URL(`/?error=${encodeURIComponent(error)}`, request.url)
+      return new NextResponse(
+        `<html><body><script>
+          window.opener?.postMessage({type: 'GSC_AUTH_ERROR', error: '${error}'}, '*');
+          window.close();
+        </script></body></html>`,
+        { headers: { 'Content-Type': 'text/html' } }
       );
     }
 
     // Handle missing authorization code
     if (!code) {
-      return NextResponse.redirect(
-        new URL('/?error=missing_code', request.url)
+      return new NextResponse(
+        `<html><body><script>
+          window.opener?.postMessage({type: 'GSC_AUTH_ERROR', error: 'missing_code'}, '*');
+          window.close();
+        </script></body></html>`,
+        { headers: { 'Content-Type': 'text/html' } }
       );
     }
 
@@ -26,15 +34,23 @@ export async function GET(request: NextRequest) {
     const gscClient = getGSCClient();
     await gscClient.setCredentials(code);
 
-    // Redirect back to main page with success
-    return NextResponse.redirect(
-      new URL('/?auth=success', request.url)
+    // Send success message to parent window and close popup
+    return new NextResponse(
+      `<html><body><script>
+        window.opener?.postMessage({type: 'GSC_AUTH_SUCCESS'}, '*');
+        window.close();
+      </script></body></html>`,
+      { headers: { 'Content-Type': 'text/html' } }
     );
 
   } catch (error) {
     console.error('Callback error:', error);
-    return NextResponse.redirect(
-      new URL(`/?error=${encodeURIComponent('auth_failed')}`, request.url)
+    return new NextResponse(
+      `<html><body><script>
+        window.opener?.postMessage({type: 'GSC_AUTH_ERROR', error: 'auth_failed'}, '*');
+        window.close();
+      </script></body></html>`,
+      { headers: { 'Content-Type': 'text/html' } }
     );
   }
 }

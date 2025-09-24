@@ -117,7 +117,7 @@ export function GSCConnection({ onDataFetch, dateRange }: GSCConnectionProps) {
               {isLoading ? (
                 <>
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Connecting...
+                  Opening authentication popup...
                 </>
               ) : (
                 <>
@@ -126,6 +126,12 @@ export function GSCConnection({ onDataFetch, dateRange }: GSCConnectionProps) {
                 </>
               )}
             </Button>
+            
+            {isLoading && (
+              <div className="text-xs text-blue-600 bg-blue-50 dark:bg-blue-900/20 p-2 rounded">
+                📱 A popup window will open for Google authentication. Please allow popups for this site if blocked.
+              </div>
+            )}
           </div>
         ) : (
           <div className="space-y-4">

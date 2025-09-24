@@ -24,23 +24,6 @@ export default function Dashboard() {
     sources: [SOURCES.GSC, SOURCES.AHREFS],
   });
 
-  // Handle OAuth callback results
-  useEffect(() => {
-    const urlParams = new URLSearchParams(window.location.search);
-    const authResult = urlParams.get('auth');
-    const error = urlParams.get('error');
-    
-    if (authResult === 'success') {
-      // Clear URL parameters
-      window.history.replaceState({}, document.title, window.location.pathname);
-      // You could show a success message here
-      console.log('GSC authentication successful!');
-    } else if (error) {
-      // Clear URL parameters
-      window.history.replaceState({}, document.title, window.location.pathname);
-      console.error('GSC authentication error:', error);
-    }
-  }, []);
 
   // Mock data for development
   useEffect(() => {
@@ -147,12 +130,21 @@ export default function Dashboard() {
       if (parseResult.success && parseResult.data) {
         // Normalize and add to existing data
         const normalizedData = normalizeAhrefsData(parseResult.data);
-        setData(prevData => [...prevData, ...normalizedData]);
+        setData(prevData => {
+          // Remove existing Ahrefs data and add new data
+          const gscData = prevData.filter(item => item.source === SOURCES.GSC);
+          return [...gscData, ...normalizedData];
+        });
         
-        alert(`Successfully imported ${parseResult.validRows} rows from ${parseResult.totalRows} total rows.`);
+        // Show success message
+        const successMessage = `✅ Successfully imported ${parseResult.validRows} rows from ${parseResult.totalRows} total rows.`;
+        alert(successMessage);
         
         if (parseResult.errors && parseResult.errors.length > 0) {
           console.warn('Import warnings:', parseResult.errors);
+          if (parseResult.errors.length < 10) {
+            alert(`⚠️ Some rows had issues:\n${parseResult.errors.slice(0, 5).join('\n')}`);
+          }
         }
       } else {
         alert(`Failed to import CSV: ${parseResult.errors?.join(', ') || 'Unknown error'}`);
@@ -171,6 +163,21 @@ export default function Dashboard() {
     // Replace existing GSC data and merge with Ahrefs data
     const ahrefsData = data.filter(item => item.source === SOURCES.AHREFS);
     setData([...gscData, ...ahrefsData]);
+  };
+
+  const downloadSampleCSV = () => {
+    const sampleCSV = `keyword,url,position,volume,difficulty,cpc,traffic,date
+seo reporting tool,/seo-tools,3,1200,45,2.50,180,2024-01-01
+keyword research,/blog/keyword-research,7,800,35,1.80,120,2024-01-01
+search console api,/api-docs,12,500,25,3.20,80,2024-01-01`;
+    
+    const blob = new Blob([sampleCSV], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'ahrefs-sample.csv';
+    a.click();
+    URL.revokeObjectURL(url);
   };
 
   return (
@@ -227,16 +234,58 @@ export default function Dashboard() {
                     onChange={handleFileUpload}
                     className="hidden"
                     id="csv-upload"
+                    ref={(input) => {
+                      if (input) {
+                        (window as any).csvFileInput = input;
+                      }
+                    }}
                   />
-                  <label htmlFor="csv-upload">
-                    <Button variant="outline" className="w-full cursor-pointer" disabled={loading}>
+                  <div className="space-y-3">
+                    <Button 
+                      variant="outline" 
+                      className="w-full" 
+                      disabled={loading}
+                      onClick={() => {
+                        const input = document.getElementById('csv-upload') as HTMLInputElement;
+                        input?.click();
+                      }}
+                    >
                       <Upload className="h-4 w-4 mr-2" />
                       {loading ? 'Processing...' : 'Upload CSV'}
                     </Button>
-                  </label>
+                    
+                    <Button 
+                      variant="ghost" 
+                      size="sm"
+                      className="w-full text-xs" 
+                      onClick={downloadSampleCSV}
+                    >
+                      Download Sample CSV Format
+                    </Button>
+                  </div>
+                  
+                  <div className="text-xs text-gray-500 space-y-1">
+                    <div className="font-medium">Expected columns:</div>
+                    <div>keyword, url, position, volume, difficulty, cpc, traffic, date</div>
+                  </div>
                 </div>
               </CardContent>
             </Card>
+          </div>
+        </div>
+
+        {/* Date Range Controls */}
+        <div className="mb-8">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border p-6">
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+              Date Range
+            </h2>
+            <FilterPanel
+              filters={filters}
+              onFiltersChange={setFilters}
+              availableQueries={filterOptions.queries}
+              availableUrls={filterOptions.urls}
+            />
           </div>
         </div>
 
@@ -298,16 +347,6 @@ export default function Dashboard() {
               </CardContent>
             </Card>
           </div>
-        </div>
-
-        {/* Filters */}
-        <div className="mb-8">
-          <FilterPanel
-            filters={filters}
-            onFiltersChange={setFilters}
-            availableQueries={filterOptions.queries}
-            availableUrls={filterOptions.urls}
-          />
         </div>
 
         {/* Charts and Tables */}

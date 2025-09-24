@@ -49,18 +49,50 @@ export function useGSC() {
       
       // Listen for popup completion
       return new Promise<boolean>((resolve, reject) => {
+        // Listen for messages from popup
+        const handleMessage = (event: MessageEvent) => {
+          if (event.origin !== window.location.origin) return;
+          
+          if (event.data.type === 'GSC_AUTH_SUCCESS') {
+            cleanup();
+            setState(prev => ({ 
+              ...prev, 
+              isAuthenticated: true, 
+              isLoading: false,
+              error: null 
+            }));
+            // Load sites after successful authentication
+            loadSites().then(() => resolve(true)).catch(() => resolve(true));
+          } else if (event.data.type === 'GSC_AUTH_ERROR') {
+            cleanup();
+            setError(event.data.error || 'Authentication failed');
+            resolve(false);
+          }
+        };
+
+        // Check if popup was closed manually
         const checkClosed = setInterval(() => {
           if (popup?.closed) {
-            clearInterval(checkClosed);
-            // Check if authentication was successful
-            checkAuthStatus().then(resolve).catch(reject);
+            cleanup();
+            setError('Authentication cancelled');
+            resolve(false);
           }
         }, 1000);
         
-        // Timeout after 5 minutes
-        setTimeout(() => {
+        // Cleanup function
+        const cleanup = () => {
           clearInterval(checkClosed);
+          clearTimeout(timeout);
+          window.removeEventListener('message', handleMessage);
           popup?.close();
+        };
+        
+        // Add message listener
+        window.addEventListener('message', handleMessage);
+        
+        // Timeout after 5 minutes
+        const timeout = setTimeout(() => {
+          cleanup();
           reject(new Error('Authentication timeout'));
         }, 300000);
       });
