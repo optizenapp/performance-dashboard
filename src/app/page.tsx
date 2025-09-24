@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Upload, BarChart3, TrendingUp } from 'lucide-react';
@@ -13,6 +13,7 @@ import { FilterPanel } from '@/components/filters/filter-panel';
 import { PerformanceChart } from '@/components/charts/performance-chart';
 import { DataTable } from '@/components/tables/data-table';
 import { GSCConnection } from '@/components/gsc/gsc-connection';
+import { saveDataToStorage, loadDataFromStorage, hasStoredData, clearStoredData } from '@/lib/data-storage';
 
 export default function Dashboard() {
   const [data, setData] = useState<NormalizedMetric[]>([]);
@@ -25,7 +26,27 @@ export default function Dashboard() {
   });
 
 
-  // Start with empty data - will be populated by GSC connection or CSV upload
+  // Load persisted data on mount
+  useEffect(() => {
+    const loadPersistedData = async () => {
+      if (hasStoredData()) {
+        try {
+          setLoading(true);
+          const persistedData = await loadDataFromStorage();
+          if (persistedData.length > 0) {
+            setData(persistedData);
+            console.log(`Loaded ${persistedData.length} persisted data points`);
+          }
+        } catch (error) {
+          console.error('Failed to load persisted data:', error);
+        } finally {
+          setLoading(false);
+        }
+      }
+    };
+
+    loadPersistedData();
+  }, []);
 
   // Calculate filtered data
   const filteredData = useMemo(() => {
@@ -130,11 +151,18 @@ export default function Dashboard() {
       if (parseResult.success && parseResult.data) {
         // Normalize and add to existing data
         const normalizedData = normalizeAhrefsData(parseResult.data);
-        setData(prevData => {
-          // Remove existing Ahrefs data and add new data
-          const gscData = prevData.filter(item => item.source === SOURCES.GSC);
-          return [...gscData, ...normalizedData];
-        });
+        const gscData = data.filter(item => item.source === SOURCES.GSC);
+        const newData = [...gscData, ...normalizedData];
+        
+        setData(newData);
+        
+        // Save to persistent storage
+        try {
+          await saveDataToStorage(newData);
+          console.log('Ahrefs data saved to storage');
+        } catch (error) {
+          console.error('Failed to save Ahrefs data:', error);
+        }
         
         // Show success message
         const successMessage = `✅ Successfully imported ${parseResult.validRows} rows from ${parseResult.totalRows} total rows.`;
@@ -159,10 +187,23 @@ export default function Dashboard() {
     }
   };
 
-  const handleGSCData = (gscData: NormalizedMetric[]) => {
-    // Replace existing GSC data and merge with Ahrefs data
-    const ahrefsData = data.filter(item => item.source === SOURCES.AHREFS);
-    setData([...gscData, ...ahrefsData]);
+  const handleGSCData = async (gscData: NormalizedMetric[]) => {
+    try {
+      // Replace existing GSC data and merge with Ahrefs data
+      const ahrefsData = data.filter(item => item.source === SOURCES.AHREFS);
+      const newData = [...gscData, ...ahrefsData];
+      
+      setData(newData);
+      
+      // Save to persistent storage
+      await saveDataToStorage(newData);
+      console.log('GSC data saved to storage');
+    } catch (error) {
+      console.error('Failed to save GSC data:', error);
+      // Still update the UI even if storage fails
+      const ahrefsData = data.filter(item => item.source === SOURCES.AHREFS);
+      setData([...gscData, ...ahrefsData]);
+    }
   };
 
   const downloadSampleCSV = () => {
@@ -245,7 +286,7 @@ search console api,/api-docs,12,500,25,3.20,80,2024-01-01`;
                       }}
                     >
                       <Upload className="h-4 w-4 mr-2" />
-                      {loading ? 'Processing...' : 'Upload CSV'}
+                      {loading ? 'Processing CSV...' : 'Upload CSV'}
                     </Button>
                     
                     <Button 
@@ -272,6 +313,9 @@ search console api,/api-docs,12,500,25,3.20,80,2024-01-01`;
                   <div className="text-xs text-gray-500 space-y-1">
                     <div className="font-medium">Expected columns:</div>
                     <div>keyword, url, position, volume, difficulty, cpc, traffic, date</div>
+                    <div className="mt-2 text-gray-400">
+                      <strong>File size limit:</strong> Up to 50MB supported
+                    </div>
                   </div>
                 </div>
               </CardContent>
@@ -283,9 +327,30 @@ search console api,/api-docs,12,500,25,3.20,80,2024-01-01`;
         {data.length > 0 && (
           <div className="mb-8">
             <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border p-6">
-              <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-                Imported Data Status
-              </h2>
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
+                  Imported Data Status
+                </h2>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={async () => {
+                    if (confirm('Are you sure you want to clear all imported data? This cannot be undone.')) {
+                      try {
+                        await clearStoredData();
+                        setData([]);
+                        console.log('All data cleared');
+                      } catch (error) {
+                        console.error('Failed to clear data:', error);
+                        alert('Failed to clear data. Please try again.');
+                      }
+                    }
+                  }}
+                  className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                >
+                  Clear All Data
+                </Button>
+              </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {/* GSC Data Status */}
                 {data.some(item => item.source === 'gsc') && (

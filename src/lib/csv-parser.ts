@@ -214,9 +214,9 @@ export function validateCSVFile(file: File): { valid: boolean; error?: string } 
     return { valid: false, error: 'Please select a CSV file' };
   }
 
-  // Check file size (max 10MB)
-  if (file.size > 10 * 1024 * 1024) {
-    return { valid: false, error: 'File size must be less than 10MB' };
+  // Check file size (max 50MB)
+  if (file.size > 50 * 1024 * 1024) {
+    return { valid: false, error: 'File size must be less than 50MB' };
   }
 
   return { valid: true };
