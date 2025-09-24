@@ -17,7 +17,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 // import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
 import { TrendingUp, BarChart3, LineChart as LineChartIcon } from 'lucide-react';
-import { ChartDataPoint } from '@/lib/types';
+import { ChartDataPoint, SectionFilters } from '@/lib/types';
 import { formatMetricValue } from '@/lib/data-utils';
 import { format, parseISO } from 'date-fns';
 
@@ -30,6 +30,7 @@ interface PerformanceChartProps {
   availableMetrics: string[];
   height?: number;
   showComparison?: boolean;
+  sectionFilters?: SectionFilters;
 }
 
 const METRIC_COLORS = {
@@ -76,7 +77,8 @@ export function PerformanceChart({
   onMetricsChange,
   availableMetrics,
   height = 400,
-  // showComparison = false, // Unused in multi-metric mode
+  showComparison = false,
+  sectionFilters,
 }: PerformanceChartProps) {
   const [chartType, setChartType] = useState<'line' | 'bar'>('line');
 
@@ -90,6 +92,18 @@ export function PerformanceChart({
 
   // Process data for the chart
   const chartData = useMemo(() => {
+    // Filter data by section date range if provided
+    let filteredData = data;
+    if (sectionFilters?.dateRange) {
+      const startDate = new Date(sectionFilters.dateRange.startDate);
+      const endDate = new Date(sectionFilters.dateRange.endDate);
+      
+      filteredData = data.filter(point => {
+        const pointDate = new Date(point.date);
+        return pointDate >= startDate && pointDate <= endDate;
+      });
+    }
+
     // Group data by date
     const grouped = new Map<string, {
       date: string;
@@ -97,7 +111,7 @@ export function PerformanceChart({
       [key: string]: string | number | undefined;
     }>();
 
-    data.forEach(point => {
+    filteredData.forEach(point => {
       // Only include data for selected metrics
       if (!selectedMetrics.includes(point.metric)) return;
 
@@ -119,7 +133,7 @@ export function PerformanceChart({
     return Array.from(grouped.values()).sort((a, b) => 
       new Date(a.date).getTime() - new Date(b.date).getTime()
     );
-  }, [data, selectedMetrics]);
+  }, [data, selectedMetrics, sectionFilters]);
 
   // Custom tooltip formatter
   const CustomTooltip = ({ active, payload, label }: {

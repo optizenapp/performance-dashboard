@@ -116,7 +116,7 @@ export class GSCClient {
     startDate: string,
     endDate: string,
     dimensions: string[] = ['query'],
-    rowLimit: number = 1000
+    rowLimit: number = 25000
   ): Promise<GSCMetric[]> {
     try {
       const request = {
@@ -154,8 +154,15 @@ export class GSCClient {
         responseReceived: !!response,
         dataReceived: !!data,
         rowCount: data?.rows?.length || 0,
+        requestedLimit: rowLimit,
+        hitLimit: (data?.rows?.length || 0) >= rowLimit,
         firstRow: data?.rows?.[0],
-        responseStatus: response.status
+        responseStatus: response.status,
+        dataAvailability: {
+          receivedRows: data?.rows?.length || 0,
+          maxPossible: rowLimit,
+          percentageOfLimit: Math.round(((data?.rows?.length || 0) / rowLimit) * 100)
+        }
       });
 
       if (!data.rows || data.rows.length === 0) {

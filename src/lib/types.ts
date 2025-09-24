@@ -116,6 +116,39 @@ export const FilterOptionsSchema = z.object({
   urls: z.array(z.string()).optional(),
 });
 
+export type FilterOptions = z.infer<typeof FilterOptionsSchema>;
+
+// Section-specific filter types
+export const SectionFiltersSchema = z.object({
+  dateRange: DateRangeSchema,
+  enableComparison: z.boolean().optional(),
+  comparisonDateRange: DateRangeSchema.optional(),
+  comparisonPreset: ComparisonPresetSchema.optional(),
+});
+
+export type SectionFilters = z.infer<typeof SectionFiltersSchema>;
+
+// Global filter types (for data fetching)
+export const GlobalFiltersSchema = z.object({
+  dateRange: DateRangeSchema, // Wide date range to cover all sections
+  metrics: z.array(z.enum(['clicks', 'impressions', 'ctr', 'position', 'volume', 'traffic'])),
+  sources: z.array(z.enum(['gsc', 'ahrefs'])),
+  queries: z.array(z.string()).optional(),
+  urls: z.array(z.string()).optional(),
+});
+
+export type GlobalFilters = z.infer<typeof GlobalFiltersSchema>;
+
+// Dashboard filter structure
+export const DashboardFiltersSchema = z.object({
+  global: GlobalFiltersSchema,
+  chart: SectionFiltersSchema,
+  quickView: SectionFiltersSchema,
+  table: SectionFiltersSchema,
+});
+
+export type DashboardFilters = z.infer<typeof DashboardFiltersSchema>;
+
 // Chart Data Types
 export const ChartDataPointSchema = z.object({
   date: z.string(),

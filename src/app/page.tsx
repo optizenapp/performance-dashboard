@@ -4,12 +4,13 @@ import { useState, useMemo, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Upload, BarChart3, TrendingUp } from 'lucide-react';
-import { NormalizedMetric, FilterOptions, ChartDataPoint } from '@/lib/types';
+import { NormalizedMetric, FilterOptions, ChartDataPoint, DashboardFilters, SectionFilters } from '@/lib/types';
 import { getDateRangePreset } from '@/lib/data-utils';
 import { SOURCES } from '@/lib/types';
 import { prepareChartData, prepareTableData, extractFilterOptions, normalizeAhrefsData } from '@/lib/data-utils';
 import { parseAhrefsCSV, validateCSVFile, readFileAsText } from '@/lib/csv-parser';
 import { FilterPanel } from '@/components/filters/filter-panel';
+import { SectionFilterPanel } from '@/components/filters/section-filter-panel';
 import { PerformanceChart } from '@/components/charts/performance-chart';
 import { DataTable } from '@/components/tables/data-table';
 import { ComparisonDataTable } from '@/components/tables/comparison-data-table';
@@ -37,6 +38,18 @@ export default function Dashboard() {
     enableComparison: false,
     comparisonPreset: undefined,
     comparisonDateRange: undefined,
+  });
+
+  // New section-specific filters
+  const defaultSectionFilters: SectionFilters = {
+    dateRange: getDateRangePreset('last_30_days'),
+    enableComparison: false,
+  };
+
+  const [sectionFilters, setSectionFilters] = useState({
+    chart: { ...defaultSectionFilters },
+    quickView: { ...defaultSectionFilters },
+    table: { ...defaultSectionFilters },
   });
 
 
@@ -197,11 +210,12 @@ export default function Dashboard() {
   const chartData = useMemo(() => {
     const allChartData: ChartDataPoint[] = [];
     selectedChartMetrics.forEach(metric => {
-      const metricData = prepareChartData(filteredData, metric, 'date');
+      // Use all data instead of filteredData - chart will do its own filtering based on sectionFilters
+      const metricData = prepareChartData(data, metric, 'date');
       allChartData.push(...metricData);
     });
     return allChartData;
-  }, [filteredData, selectedChartMetrics]);
+  }, [data, selectedChartMetrics]);
   const tableData = prepareTableData(filteredData, filters.enableComparison);
   
   // Filter table data by source
@@ -598,13 +612,41 @@ search console api,https://example.com/api-docs,12,500,25,3.20,80,2024-01-01,60,
 
         {/* Charts and Tables */}
         <div className="space-y-8">
-          <PerformanceChart
-            data={chartData}
-            selectedMetrics={selectedChartMetrics}
-            onMetricsChange={setSelectedChartMetrics}
-            availableMetrics={filters.metrics.filter(metric => metric !== 'volume' && metric !== 'traffic')}
-            showComparison={filters.sources.length > 1}
-          />
+          {/* Chart Section with Independent Filters */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center space-x-2">
+                <BarChart3 className="h-5 w-5" />
+                <span>Performance Charts</span>
+              </CardTitle>
+              <CardDescription>
+                Visualize your metrics over time with independent date range and comparison controls
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              {/* Chart-specific filters */}
+              <SectionFilterPanel
+                title="Chart Filters"
+                description="Control date range and comparison for charts"
+                icon={<BarChart3 className="h-4 w-4 text-blue-500" />}
+                filters={sectionFilters.chart}
+                onFiltersChange={(newFilters) => 
+                  setSectionFilters(prev => ({ ...prev, chart: newFilters }))
+                }
+                className="border border-blue-200 bg-blue-50/50 dark:border-blue-800 dark:bg-blue-900/20"
+              />
+              
+              {/* Chart component */}
+              <PerformanceChart
+                data={chartData}
+                selectedMetrics={selectedChartMetrics}
+                onMetricsChange={setSelectedChartMetrics}
+                availableMetrics={filters.metrics.filter(metric => metric !== 'volume' && metric !== 'traffic')}
+                showComparison={sectionFilters.chart.enableComparison}
+                sectionFilters={sectionFilters.chart}
+              />
+            </CardContent>
+          </Card>
 
           {/* Performance Data Table */}
           <Card>

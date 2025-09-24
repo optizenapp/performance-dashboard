@@ -55,20 +55,29 @@ export function GSCConnection({ onDataFetch, dateRange: initialDateRange }: GSCC
     try {
       setFetchingData(true);
       
-      // Fetch aggregated data for table (query-level data)
-      // Time series data is mainly for charts and contains "Total" entries that we don't want in tables
-      const aggregatedData = await fetchData(dateRange.startDate, dateRange.endDate, ['query', 'page'], false);
+      // Fetch both aggregated data (for tables) and time series data (for charts)
+      const [aggregatedData, timeSeriesData] = await Promise.all([
+        // Aggregated data for tables (query-level data without dates)
+        fetchData(dateRange.startDate, dateRange.endDate, ['query', 'page'], false),
+        // Time series data for charts (daily data points)
+        fetchData(dateRange.startDate, dateRange.endDate, ['date'], true)
+      ]);
+      
+      // Combine both datasets
+      const combinedData = [...aggregatedData, ...timeSeriesData];
       
       // Debug logging
       console.log('GSC Frontend Data:', {
-        count: aggregatedData.length,
-        sampleData: aggregatedData.slice(0, 5),
+        aggregatedCount: aggregatedData.length,
+        timeSeriesCount: timeSeriesData.length,
+        totalCount: combinedData.length,
+        aggregatedSample: aggregatedData.slice(0, 3),
+        timeSeriesSample: timeSeriesData.slice(0, 5),
         dateRange,
-        dimensions: ['query', 'page']
       });
       
       if (onDataFetch) {
-        onDataFetch(aggregatedData);
+        onDataFetch(combinedData);
       }
     } catch (error) {
       console.error('Failed to fetch GSC data:', error);

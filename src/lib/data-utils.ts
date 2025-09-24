@@ -120,7 +120,27 @@ export function prepareChartData(
   groupBy: 'date' | 'query' | 'source' = 'date'
 ): ChartDataPoint[] {
   // For position metric, only use GSC data (since it's "Average Position")
-  const filteredData = metric === 'position' ? data.filter(item => item.source === SOURCES.GSC) : data;
+  let filteredData = metric === 'position' ? data.filter(item => item.source === SOURCES.GSC) : data;
+  
+  // For date-based charts, prioritize time series data (which has actual daily dates)
+  // over aggregated data (which has artificial representative dates)
+  if (groupBy === 'date') {
+    const timeSeriesData = filteredData.filter(item => 
+      item.source === SOURCES.GSC && 
+      (item.query === 'Total' || item.query === '' || !item.query)
+    );
+    
+    // If we have time series data, use it for charts; otherwise fall back to aggregated data
+    if (timeSeriesData.length > 0) {
+      console.log('📊 Using GSC time series data for chart:', {
+        timeSeriesCount: timeSeriesData.length,
+        aggregatedCount: filteredData.length - timeSeriesData.length,
+        metric,
+        sampleDates: timeSeriesData.slice(0, 5).map(item => item.date)
+      });
+      filteredData = timeSeriesData;
+    }
+  }
   
   const grouped = new Map<string, { value: number; count: number; source?: string }>();
 
