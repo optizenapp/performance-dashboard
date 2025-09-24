@@ -231,6 +231,7 @@ export function prepareTableData(data: NormalizedMetric[], enableComparison = fa
     // Calculate traffic change for Ahrefs comparison data
     if (enableComparison && item.source === 'ahrefs') {
       // Check if we have Ahrefs comparison data
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const ahrefsData = item as any;
       if (ahrefsData.trafficChange !== undefined) {
         existing.trafficChange = ahrefsData.trafficChange;
