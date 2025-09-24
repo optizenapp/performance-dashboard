@@ -337,6 +337,20 @@ export default function Dashboard() {
       comparisonRange: `${sectionFilters.quickView.comparisonDateRange.startDate} to ${sectionFilters.quickView.comparisonDateRange.endDate}`
     });
 
+    // Check if comparison period is within available data range
+    const allDates = data.map(item => new Date(item.date)).sort((a, b) => a.getTime() - b.getTime());
+    const earliestDataDate = allDates[0];
+    const latestDataDate = allDates[allDates.length - 1];
+    const comparisonStart = new Date(sectionFilters.quickView.comparisonDateRange.startDate);
+    
+    if (earliestDataDate && comparisonStart < earliestDataDate) {
+      console.warn('⚠️ Comparison period extends before available data:', {
+        comparisonStart: comparisonStart.toISOString().split('T')[0],
+        earliestData: earliestDataDate.toISOString().split('T')[0],
+        daysBefore: Math.ceil((earliestDataDate.getTime() - comparisonStart.getTime()) / (1000 * 60 * 60 * 24))
+      });
+    }
+
     // Filter data for comparison period
     const comparisonStartDate = new Date(sectionFilters.quickView.comparisonDateRange.startDate);
     const comparisonEndDate = new Date(sectionFilters.quickView.comparisonDateRange.endDate);

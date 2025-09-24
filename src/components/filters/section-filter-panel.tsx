@@ -35,11 +35,12 @@ export function SectionFilterPanel({
   };
 
   const comparisonPresets = [
-    { value: 'last_7d_vs_previous', label: 'Last 7 days vs Previous' },
-    { value: 'last_7d_vs_year_ago', label: 'Last 7 days vs Year Ago' },
-    { value: 'last_28d_vs_previous', label: 'Last 28 days vs Previous' },
-    { value: 'last_28d_vs_year_ago', label: 'Last 28 days vs Year Ago' },
-    { value: 'custom', label: 'Custom Range' },
+    { value: 'last_7d_vs_previous', label: '7 days vs Previous 7 days' },
+    { value: 'last_14d_vs_previous', label: '14 days vs Previous 14 days' },
+    { value: 'last_30d_vs_previous', label: '30 days vs Previous 30 days' },
+    { value: 'last_60d_vs_previous', label: '60 days vs Previous 60 days' },
+    { value: 'last_90d_vs_previous', label: '90 days vs Previous 90 days' },
+    { value: 'last_120d_vs_previous', label: '120 days vs Previous 120 days' },
   ] as const;
 
   return (
@@ -120,15 +121,6 @@ export function SectionFilterPanel({
               ))}
             </div>
 
-            {filters.comparisonPreset === 'custom' && (
-              <div className="mt-3">
-                <Label className="text-xs font-medium mb-2 block">Custom Comparison Range</Label>
-                <DateRangePicker
-                  dateRange={filters.comparisonDateRange || filters.dateRange}
-                  onDateRangeChange={(comparisonDateRange) => updateFilters({ comparisonDateRange })}
-                />
-              </div>
-            )}
           </div>
         )}
       </CardContent>

@@ -93,16 +93,12 @@ export const DateRangeSchema = z.object({
 });
 
 export const ComparisonPresetSchema = z.enum([
-  'last_24h_vs_previous',
-  'last_24h_vs_week_ago', 
   'last_7d_vs_previous',
-  'last_7d_vs_year_ago',
-  'last_28d_vs_previous',
-  'last_28d_vs_year_ago',
-  'last_3m_vs_previous',
-  'last_3m_vs_year_ago',
-  'last_6m_vs_previous',
-  'custom'
+  'last_14d_vs_previous',
+  'last_30d_vs_previous',
+  'last_60d_vs_previous',
+  'last_90d_vs_previous',
+  'last_120d_vs_previous'
 ]);
 
 export const FilterOptionsSchema = z.object({
