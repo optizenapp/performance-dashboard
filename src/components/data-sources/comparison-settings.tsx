@@ -28,7 +28,7 @@ export function ComparisonSettings({ filters, onFiltersChange }: ComparisonSetti
           <span>Comparison Settings</span>
         </CardTitle>
         <CardDescription>
-          Configure comparison periods for data imports. This affects how GSC data is fetched and what Ahrefs export format is expected.
+          Configure comparison periods for data imports. GSC fetches full date ranges. Ahrefs compares two specific dates (end dates of each period) for point-in-time changes.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">

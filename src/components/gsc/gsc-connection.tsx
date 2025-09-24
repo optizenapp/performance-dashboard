@@ -13,14 +13,9 @@ import { NormalizedMetric } from '@/lib/types';
 interface GSCConnectionProps {
   onDataFetch?: (data: NormalizedMetric[]) => void;
   dateRange: { startDate: string; endDate: string };
-  comparisonSettings?: {
-    enabled: boolean;
-    comparisonDateRange?: { startDate: string; endDate: string };
-    preset?: string;
-  };
 }
 
-export function GSCConnection({ onDataFetch, dateRange, comparisonSettings }: GSCConnectionProps) {
+export function GSCConnection({ onDataFetch, dateRange }: GSCConnectionProps) {
   const {
     isAuthenticated,
     isLoading,
@@ -55,29 +50,14 @@ export function GSCConnection({ onDataFetch, dateRange, comparisonSettings }: GS
     try {
       setFetchingData(true);
       
-      // Fetch primary period data
+      // Fetch both time series and aggregated data
       const [timeSeriesData, aggregatedData] = await Promise.all([
         fetchData(dateRange.startDate, dateRange.endDate, ['date'], true),
         fetchData(dateRange.startDate, dateRange.endDate, ['query', 'page'], false),
       ]);
       
-      let combinedData = [...timeSeriesData, ...aggregatedData];
-      
-      // If comparison is enabled, fetch comparison period data
-      if (comparisonSettings?.enabled && comparisonSettings.comparisonDateRange) {
-        const [compTimeSeriesData, compAggregatedData] = await Promise.all([
-          fetchData(comparisonSettings.comparisonDateRange.startDate, comparisonSettings.comparisonDateRange.endDate, ['date'], true),
-          fetchData(comparisonSettings.comparisonDateRange.startDate, comparisonSettings.comparisonDateRange.endDate, ['query', 'page'], false),
-        ]);
-        
-        // Mark comparison data with a flag or different source identifier
-        const comparisonData = [...compTimeSeriesData, ...compAggregatedData].map(item => ({
-          ...item,
-          isComparison: true,
-        }));
-        
-        combinedData = [...combinedData, ...comparisonData];
-      }
+      // Combine both datasets
+      const combinedData = [...timeSeriesData, ...aggregatedData];
       
       if (onDataFetch) {
         onDataFetch(combinedData);
@@ -202,15 +182,7 @@ export function GSCConnection({ onDataFetch, dateRange, comparisonSettings }: GS
               <div className="text-xs text-gray-500 bg-gray-50 dark:bg-gray-800 p-2 rounded">
                 <strong>Selected:</strong> {formatSiteUrl(selectedSite)}
                 <br />
-                <strong>Primary Period:</strong> {dateRange.startDate} to {dateRange.endDate}
-                {comparisonSettings?.enabled && comparisonSettings.comparisonDateRange && (
-                  <>
-                    <br />
-                    <strong>Comparison Period:</strong> {comparisonSettings.comparisonDateRange.startDate} to {comparisonSettings.comparisonDateRange.endDate}
-                    <br />
-                    <span className="text-blue-600">✓ Comparison data will be fetched automatically</span>
-                  </>
-                )}
+                <strong>Date Range:</strong> {dateRange.startDate} to {dateRange.endDate}
               </div>
             )}
           </div>
