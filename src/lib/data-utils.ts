@@ -261,6 +261,41 @@ export function getDateRangePreset(preset: string): DateRange {
 }
 
 /**
+ * Generate comparison date range based on primary date range
+ */
+export function getComparisonDateRange(
+  primaryRange: { startDate: string; endDate: string },
+  comparisonType: 'previous_period' | 'previous_year' = 'previous_period'
+): { startDate: string; endDate: string } {
+  const primaryStart = new Date(primaryRange.startDate);
+  const primaryEnd = new Date(primaryRange.endDate);
+  const daysDiff = Math.ceil((primaryEnd.getTime() - primaryStart.getTime()) / (1000 * 60 * 60 * 24));
+
+  if (comparisonType === 'previous_year') {
+    // Compare to same period last year
+    const comparisonStart = new Date(primaryStart);
+    comparisonStart.setFullYear(comparisonStart.getFullYear() - 1);
+    
+    const comparisonEnd = new Date(primaryEnd);
+    comparisonEnd.setFullYear(comparisonEnd.getFullYear() - 1);
+    
+    return {
+      startDate: comparisonStart.toISOString().split('T')[0],
+      endDate: comparisonEnd.toISOString().split('T')[0],
+    };
+  } else {
+    // Compare to previous period of same length
+    const comparisonEnd = new Date(primaryStart.getTime() - 24 * 60 * 60 * 1000); // Day before primary start
+    const comparisonStart = new Date(comparisonEnd.getTime() - (daysDiff - 1) * 24 * 60 * 60 * 1000);
+    
+    return {
+      startDate: comparisonStart.toISOString().split('T')[0],
+      endDate: comparisonEnd.toISOString().split('T')[0],
+    };
+  }
+}
+
+/**
  * Extract unique values from data for filter options
  */
 export function extractFilterOptions(data: NormalizedMetric[]) {

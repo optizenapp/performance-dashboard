@@ -61,6 +61,8 @@ export const DateRangeSchema = z.object({
 
 export const FilterOptionsSchema = z.object({
   dateRange: DateRangeSchema,
+  comparisonDateRange: DateRangeSchema.optional(),
+  enableComparison: z.boolean().optional(),
   metrics: z.array(z.enum(['clicks', 'impressions', 'ctr', 'position', 'volume', 'traffic'])),
   sources: z.array(z.enum(['gsc', 'ahrefs'])),
   queries: z.array(z.string()).optional(),
@@ -71,6 +73,7 @@ export const FilterOptionsSchema = z.object({
 export const ChartDataPointSchema = z.object({
   date: z.string(),
   value: z.number(),
+  comparisonValue: z.number().optional(),
   metric: z.string(),
   source: z.string().optional(),
 });

@@ -7,11 +7,13 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 // import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { X, Filter, RotateCcw } from 'lucide-react';
+import { X, Filter, RotateCcw, TrendingUp } from 'lucide-react';
 import { DateRangePicker } from './date-range-picker';
 import { MetricSelector } from './metric-selector';
 import { FilterOptions, SOURCES } from '@/lib/types';
+import { getComparisonDateRange } from '@/lib/data-utils';
 import { cn } from '@/lib/utils';
+import { Switch } from '@/components/ui/switch';
 
 interface FilterPanelProps {
   filters: FilterOptions;
@@ -135,11 +137,63 @@ export function FilterPanel({
         <CardHeader>
           <CardTitle className="text-base">Date Range</CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-4">
           <DateRangePicker
             dateRange={filters.dateRange}
             onDateRangeChange={(dateRange) => updateFilters({ dateRange })}
           />
+          
+          {/* Comparison Toggle */}
+          <div className="flex items-center justify-between pt-4 border-t">
+            <div className="flex items-center space-x-2">
+              <TrendingUp className="h-4 w-4 text-blue-600" />
+              <Label htmlFor="comparison-toggle" className="text-sm font-medium">
+                Compare with previous period
+              </Label>
+            </div>
+            <Switch
+              id="comparison-toggle"
+              checked={filters.enableComparison || false}
+              onCheckedChange={(checked) => {
+                const updates: Partial<FilterOptions> = { enableComparison: checked };
+                if (checked && !filters.comparisonDateRange) {
+                  updates.comparisonDateRange = getComparisonDateRange(filters.dateRange);
+                }
+                updateFilters(updates);
+              }}
+            />
+          </div>
+          
+          {/* Comparison Date Range */}
+          {filters.enableComparison && (
+            <div className="space-y-2 pt-2">
+              <Label className="text-sm text-gray-600">Comparison Period</Label>
+              <DateRangePicker
+                dateRange={filters.comparisonDateRange || getComparisonDateRange(filters.dateRange)}
+                onDateRangeChange={(comparisonDateRange) => updateFilters({ comparisonDateRange })}
+              />
+              <div className="flex space-x-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => updateFilters({ 
+                    comparisonDateRange: getComparisonDateRange(filters.dateRange, 'previous_period') 
+                  })}
+                >
+                  Previous Period
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => updateFilters({ 
+                    comparisonDateRange: getComparisonDateRange(filters.dateRange, 'previous_year') 
+                  })}
+                >
+                  Previous Year
+                </Button>
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
 
