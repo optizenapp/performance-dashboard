@@ -280,6 +280,78 @@ search console api,/api-docs,12,500,25,3.20,80,2024-01-01`;
           </div>
         </div>
 
+        {/* Data Status */}
+        {data.length > 0 && (
+          <div className="mb-8">
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border p-6">
+              <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+                Imported Data Status
+              </h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* GSC Data Status */}
+                {data.some(item => item.source === 'gsc') && (
+                  <div className="p-3 bg-blue-50 dark:bg-blue-950/20 rounded-lg border border-blue-200 dark:border-blue-800">
+                    <div className="flex items-center space-x-2 mb-2">
+                      <div className="w-2 h-2 rounded-full bg-blue-500"></div>
+                      <span className="font-medium text-blue-900 dark:text-blue-100">Google Search Console</span>
+                    </div>
+                    <div className="text-sm text-blue-700 dark:text-blue-300">
+                      {(() => {
+                        const gscData = data.filter(item => item.source === 'gsc');
+                        const dates = gscData.map(item => item.date).sort();
+                        const startDate = dates[0];
+                        const endDate = dates[dates.length - 1];
+                        return (
+                          <>
+                            <div><strong>Date Range:</strong> {startDate} to {endDate}</div>
+                            <div><strong>Data Points:</strong> {gscData.length.toLocaleString()}</div>
+                          </>
+                        );
+                      })()}
+                    </div>
+                  </div>
+                )}
+                
+                {/* Ahrefs Data Status */}
+                {data.some(item => item.source === 'ahrefs') && (
+                  <div className="p-3 bg-orange-50 dark:bg-orange-950/20 rounded-lg border border-orange-200 dark:border-orange-800">
+                    <div className="flex items-center space-x-2 mb-2">
+                      <div className="w-2 h-2 rounded-full bg-orange-500"></div>
+                      <span className="font-medium text-orange-900 dark:text-orange-100">Ahrefs</span>
+                    </div>
+                    <div className="text-sm text-orange-700 dark:text-orange-300">
+                      {(() => {
+                        const ahrefsData = data.filter(item => item.source === 'ahrefs');
+                        const dates = ahrefsData.map(item => item.date).sort();
+                        const startDate = dates[0];
+                        const endDate = dates[dates.length - 1];
+                        return (
+                          <>
+                            <div><strong>Date Range:</strong> {startDate} to {endDate}</div>
+                            <div><strong>Data Points:</strong> {ahrefsData.length.toLocaleString()}</div>
+                          </>
+                        );
+                      })()}
+                    </div>
+                  </div>
+                )}
+              </div>
+              
+              {/* Overall Coverage */}
+              <div className="mt-4 p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                <div className="text-sm text-gray-700 dark:text-gray-300">
+                  <strong>Total Coverage:</strong> {(() => {
+                    const allDates = data.map(item => item.date).sort();
+                    const startDate = allDates[0];
+                    const endDate = allDates[allDates.length - 1];
+                    return `${startDate} to ${endDate} (${data.length.toLocaleString()} total data points)`;
+                  })()}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Filters and Controls */}
         <div className="mb-8">
           <FilterPanel
