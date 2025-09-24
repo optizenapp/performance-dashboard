@@ -7,8 +7,7 @@ import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { TrendingUp } from 'lucide-react';
 import { FilterOptions, ComparisonPreset } from '@/lib/types';
-import { getComparisonPresetRanges, getComparisonDateRange } from '@/lib/data-utils';
-import { DateRangePicker } from '@/components/filters/date-range-picker';
+import { getComparisonPresetRanges } from '@/lib/data-utils';
 
 interface ComparisonSettingsProps {
   filters: FilterOptions;
@@ -59,65 +58,35 @@ export function ComparisonSettings({ filters, onFiltersChange }: ComparisonSetti
             <div className="space-y-2">
               <Label className="text-sm font-medium">Comparison Period</Label>
               <Select
-                value={filters.comparisonPreset || 'last_28d_vs_previous'}
+                value={filters.comparisonPreset || 'last_30d_vs_previous'}
                 onValueChange={(preset: ComparisonPreset) => {
-                  if (preset === 'custom') {
-                    updateFilters({ comparisonPreset: preset });
-                  } else {
-                    const ranges = getComparisonPresetRanges(preset);
-                    updateFilters({
-                      comparisonPreset: preset,
-                      dateRange: ranges.primary,
-                      comparisonDateRange: ranges.comparison,
-                    });
-                  }
+                  const ranges = getComparisonPresetRanges(preset);
+                  updateFilters({
+                    comparisonPreset: preset,
+                    dateRange: ranges.primary,
+                    comparisonDateRange: ranges.comparison,
+                  });
                 }}
               >
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="last_24h_vs_previous">Compare last 24 hours to previous period</SelectItem>
-                  <SelectItem value="last_24h_vs_week_ago">Compare last 24 hours week over week</SelectItem>
-                  <SelectItem value="last_7d_vs_previous">Compare last 7 days to previous period</SelectItem>
-                  <SelectItem value="last_7d_vs_year_ago">Compare last 7 days year over year</SelectItem>
-                  <SelectItem value="last_28d_vs_previous">Compare last 28 days to previous period</SelectItem>
-                  <SelectItem value="last_28d_vs_year_ago">Compare last 28 days year over year</SelectItem>
-                  <SelectItem value="last_3m_vs_previous">Compare last 3 months to previous period</SelectItem>
-                  <SelectItem value="last_3m_vs_year_ago">Compare last 3 months year over year</SelectItem>
-                  <SelectItem value="last_6m_vs_previous">Compare last 6 months to previous period</SelectItem>
-                  <SelectItem value="custom">Custom</SelectItem>
+                  <SelectItem value="last_7d_vs_previous">7 days vs Previous 7 days</SelectItem>
+                  <SelectItem value="last_14d_vs_previous">14 days vs Previous 14 days</SelectItem>
+                  <SelectItem value="last_30d_vs_previous">30 days vs Previous 30 days</SelectItem>
+                  <SelectItem value="last_60d_vs_previous">60 days vs Previous 60 days</SelectItem>
+                  <SelectItem value="last_90d_vs_previous">90 days vs Previous 90 days</SelectItem>
+                  <SelectItem value="last_120d_vs_previous">120 days vs Previous 120 days</SelectItem>
                 </SelectContent>
               </Select>
             </div>
             
-            {/* Custom Date Ranges */}
-            {filters.comparisonPreset === 'custom' && (
-              <div className="space-y-4">
-                <div className="space-y-2">
-                  <Label className="text-sm text-gray-600">Primary Period</Label>
-                  <DateRangePicker
-                    dateRange={filters.dateRange}
-                    onDateRangeChange={(dateRange) => updateFilters({ dateRange })}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label className="text-sm text-gray-600">Comparison Period</Label>
-                  <DateRangePicker
-                    dateRange={filters.comparisonDateRange || getComparisonDateRange(filters.dateRange)}
-                    onDateRangeChange={(comparisonDateRange) => updateFilters({ comparisonDateRange })}
-                  />
-                </div>
-              </div>
-            )}
-            
             {/* Show calculated ranges for presets */}
-            {filters.comparisonPreset !== 'custom' && (
-              <div className="text-xs text-gray-500 bg-gray-50 dark:bg-gray-800 p-3 rounded">
-                <div><strong>Primary Period:</strong> {filters.dateRange.startDate} to {filters.dateRange.endDate}</div>
-                <div><strong>Comparison Period:</strong> {filters.comparisonDateRange?.startDate} to {filters.comparisonDateRange?.endDate}</div>
-              </div>
-            )}
+            <div className="text-xs text-gray-500 bg-gray-50 dark:bg-gray-800 p-3 rounded">
+              <div><strong>Primary Period:</strong> {filters.dateRange.startDate} to {filters.dateRange.endDate}</div>
+              <div><strong>Comparison Period:</strong> {filters.comparisonDateRange?.startDate} to {filters.comparisonDateRange?.endDate}</div>
+            </div>
           </div>
         )}
       </CardContent>

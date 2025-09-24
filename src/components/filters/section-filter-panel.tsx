@@ -105,14 +105,12 @@ export function SectionFilterPanel({
                     checked={filters.comparisonPreset === preset.value}
                     onChange={(e) => {
                       const value = e.target.value as ComparisonPreset;
-                      updateFilters({ comparisonPreset: value });
-                      if (value !== 'custom') {
-                        const ranges = getComparisonPresetRanges(value);
-                        updateFilters({ 
-                          comparisonDateRange: ranges.comparison,
-                          dateRange: ranges.primary 
-                        });
-                      }
+                      const ranges = getComparisonPresetRanges(value);
+                      updateFilters({ 
+                        comparisonPreset: value,
+                        comparisonDateRange: ranges.comparison,
+                        dateRange: ranges.primary 
+                      });
                     }}
                     className="w-3 h-3 text-blue-600 bg-gray-100 border-gray-300 focus:ring-blue-500 dark:focus:ring-blue-600 dark:ring-offset-gray-800 focus:ring-1 dark:bg-gray-700 dark:border-gray-600"
                   />

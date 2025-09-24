@@ -165,12 +165,12 @@ export function FilterPanel({
                 <Label>Comparison Period</Label>
                 <div className="grid grid-cols-1 gap-2">
                   {[
-                    { value: 'last_24h_vs_previous', label: 'Last 24h vs Previous Period' },
-                    { value: 'last_7d_vs_previous', label: 'Last 7 days vs Previous Period' },
-                    { value: 'last_7d_vs_year_ago', label: 'Last 7 days vs Year Ago' },
-                    { value: 'last_28d_vs_previous', label: 'Last 28 days vs Previous Period' },
-                    { value: 'last_28d_vs_year_ago', label: 'Last 28 days vs Year Ago' },
-                    { value: 'custom', label: 'Custom Date Range' },
+                    { value: 'last_7d_vs_previous', label: '7 days vs Previous 7 days' },
+                    { value: 'last_14d_vs_previous', label: '14 days vs Previous 14 days' },
+                    { value: 'last_30d_vs_previous', label: '30 days vs Previous 30 days' },
+                    { value: 'last_60d_vs_previous', label: '60 days vs Previous 60 days' },
+                    { value: 'last_90d_vs_previous', label: '90 days vs Previous 90 days' },
+                    { value: 'last_120d_vs_previous', label: '120 days vs Previous 120 days' },
                   ].map((preset) => (
                     <label key={preset.value} className="flex items-center space-x-2 cursor-pointer">
                       <input
@@ -180,15 +180,12 @@ export function FilterPanel({
                         checked={filters.comparisonPreset === preset.value}
                         onChange={(e) => {
                           const value = e.target.value as ComparisonPreset;
-                          updateFilters({ comparisonPreset: value });
-                          
-                          if (value !== 'custom') {
-                            const ranges = getComparisonPresetRanges(value);
-                            updateFilters({ 
-                              comparisonDateRange: ranges.comparison,
-                              dateRange: ranges.primary 
-                            });
-                          }
+                          const ranges = getComparisonPresetRanges(value);
+                          updateFilters({ 
+                            comparisonPreset: value,
+                            comparisonDateRange: ranges.comparison,
+                            dateRange: ranges.primary 
+                          });
                         }}
                         className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 focus:ring-blue-500 dark:focus:ring-blue-600 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600"
                       />
@@ -198,25 +195,6 @@ export function FilterPanel({
                 </div>
               </div>
 
-              {/* Custom Date Range */}
-              {filters.comparisonPreset === 'custom' && (
-                <div className="space-y-3">
-                  <div>
-                    <Label className="text-sm font-medium">Primary Period</Label>
-                    <DateRangePicker
-                      dateRange={filters.dateRange}
-                      onDateRangeChange={(dateRange) => updateFilters({ dateRange })}
-                    />
-                  </div>
-                  <div>
-                    <Label className="text-sm font-medium">Comparison Period</Label>
-                    <DateRangePicker
-                      dateRange={filters.comparisonDateRange || filters.dateRange}
-                      onDateRangeChange={(comparisonDateRange) => updateFilters({ comparisonDateRange })}
-                    />
-                  </div>
-                </div>
-              )}
             </div>
           )}
         </CardContent>
