@@ -33,7 +33,6 @@ interface DataTableProps {
   description?: string;
   loading?: boolean;
   onExport?: (format: 'csv' | 'json') => void;
-  maxRows?: number;
 }
 
 type SortField = keyof TableRowType;
@@ -45,12 +44,12 @@ export function DataTable({
   description = 'Detailed metrics for your queries and pages',
   loading = false,
   onExport,
-  maxRows = Infinity,
 }: DataTableProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [sortField, setSortField] = useState<SortField>('clicks');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
   const [currentPage, setCurrentPage] = useState(1);
+  const [rowsPerPage, setRowsPerPage] = useState(50);
 
   // Filter and sort data
   const processedData = useMemo(() => {
@@ -79,11 +78,8 @@ export function DataTable({
       });
     }
 
-    return filtered.slice(0, maxRows);
-  }, [data, searchTerm, sortField, sortDirection, maxRows]);
-
-  // Calculate rows per page (show all if maxRows is Infinity)
-  const rowsPerPage = maxRows === Infinity ? processedData.length : 10;
+    return filtered;
+  }, [data, searchTerm, sortField, sortDirection]);
 
   // Pagination
   const totalPages = Math.ceil(processedData.length / rowsPerPage);
@@ -204,15 +200,33 @@ export function DataTable({
           </div>
         </div>
         
-        {/* Search */}
-        <div className="flex items-center space-x-2 mt-4">
-          <Search className="h-4 w-4 text-gray-400" />
-          <Input
-            placeholder="Search queries or URLs..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="max-w-sm"
-          />
+        {/* Search and Pagination Controls */}
+        <div className="flex items-center justify-between mt-4">
+          <div className="flex items-center space-x-2">
+            <Search className="h-4 w-4 text-gray-400" />
+            <Input
+              placeholder="Search queries or URLs..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="max-w-sm"
+            />
+          </div>
+          <div className="flex items-center space-x-2">
+            <label className="text-sm text-gray-600">Rows per page:</label>
+            <select
+              value={rowsPerPage}
+              onChange={(e) => {
+                setRowsPerPage(Number(e.target.value));
+                setCurrentPage(1); // Reset to first page
+              }}
+              className="border rounded px-2 py-1 text-sm"
+            >
+              <option value={25}>25</option>
+              <option value={50}>50</option>
+              <option value={100}>100</option>
+              <option value={250}>250</option>
+            </select>
+          </div>
         </div>
       </CardHeader>
       <CardContent>
