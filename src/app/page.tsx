@@ -304,11 +304,6 @@ search console api,/api-docs,12,500,25,3.20,80,2024-01-01`;
                     onChange={handleFileUpload}
                     className="hidden"
                     id="csv-upload"
-                    ref={(input) => {
-                      if (input) {
-                        (window as any).csvFileInput = input;
-                      }
-                    }}
                   />
                   <div className="space-y-3">
                     <Button 
