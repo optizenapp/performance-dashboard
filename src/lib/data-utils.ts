@@ -27,6 +27,7 @@ export function normalizeGSCData(gscData: GSCMetric[]): NormalizedMetric[] {
     difficulty: undefined,
     cpc: undefined,
     traffic: undefined,
+    serpFeatures: undefined, // GSC doesn't have SERP features data
   }));
 }
 
@@ -42,11 +43,18 @@ export function normalizeAhrefsData(ahrefsData: AhrefsMetric[]): NormalizedMetri
     clicks: undefined,
     impressions: undefined,
     ctr: undefined,
-    position: undefined, // Position data comes from GSC
+    position: item.position, // Use Ahrefs position data
     volume: item.volume,
     difficulty: item.difficulty,
     cpc: item.cpc,
     traffic: item.traffic,
+    serpFeatures: item.serpFeatures,
+    // Comparison fields for Ahrefs
+    previousTraffic: item.previousTraffic,
+    trafficChange: item.trafficChange,
+    previousPosition: item.previousPosition,
+    positionChange: item.positionChange,
+    previousDate: item.previousDate,
   }));
 }
 
@@ -185,7 +193,8 @@ export function prepareTableData(data: NormalizedMetric[], enableComparison = fa
   const grouped = new Map<string, NormalizedMetric[]>();
   
   data.forEach(item => {
-    const key = `${item.query}|${item.url || 'no-url'}`;
+    // Group by query, URL, and SERP features to preserve different positions for different SERP features
+    const key = `${item.query}|${item.url || 'no-url'}|${item.serpFeatures || 'no-serp'}`;
     if (!grouped.has(key)) {
       grouped.set(key, []);
     }
@@ -193,8 +202,10 @@ export function prepareTableData(data: NormalizedMetric[], enableComparison = fa
   });
 
   return Array.from(grouped.entries()).map(([key, items]) => {
-    const query = key.split('|')[0];
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const [query, urlPart, serpPart] = key.split('|');
     const url = items[0].url || undefined;
+    const serpFeatures = serpPart !== 'no-serp' ? serpPart : undefined;
     
     // Get sources for this query-URL combination
     const sources = new Set(items.map(item => item.source));
@@ -210,24 +221,58 @@ export function prepareTableData(data: NormalizedMetric[], enableComparison = fa
     if (enableComparison) {
       // For comparison mode: show earliest vs latest data
       const sortedByDate = items.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const earliest = sortedByDate[0];
       const latest = sortedByDate[sortedByDate.length - 1];
       
-      // Calculate percentage changes
-      const clicksChange = earliest.clicks && latest.clicks ? 
-        Math.round(((latest.clicks - earliest.clicks) / earliest.clicks) * 100) : undefined;
-      const impressionsChange = earliest.impressions && latest.impressions ? 
-        Math.round(((latest.impressions - earliest.impressions) / earliest.impressions) * 100) : undefined;
-      const ctrChange = earliest.ctr && latest.ctr ? 
-        Math.round(((latest.ctr - earliest.ctr) / earliest.ctr) * 100) : undefined;
-      const positionChange = earliest.position && latest.position ? 
-        Math.round(((earliest.position - latest.position) / earliest.position) * 100) : undefined; // Lower is better for position
+      // Separate GSC and Ahrefs data for proper calculations
+      const gscItems = items.filter(item => item.source === 'gsc').sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+      const ahrefsItems = items.filter(item => item.source === 'ahrefs').sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
       
-      // Get traffic change from Ahrefs comparison data
-      const ahrefsItem = items.find(item => item.source === 'ahrefs');
+      // GSC data (first and last dates)
+      const gscFirst = gscItems[0];
+      const gscLast = gscItems[gscItems.length - 1];
+      
+      // Ahrefs data (use comparison data from CSV or first/last if comparison data exists)
+      const ahrefsFirst = ahrefsItems[0];
+      const ahrefsLast = ahrefsItems[ahrefsItems.length - 1];
+      
+      // Calculate percentage changes for GSC metrics
+      const clicksChange = gscFirst?.clicks && gscLast?.clicks ? 
+        Math.round(((gscLast.clicks - gscFirst.clicks) / gscFirst.clicks) * 100) : undefined;
+      const impressionsChange = gscFirst?.impressions && gscLast?.impressions ? 
+        Math.round(((gscLast.impressions - gscFirst.impressions) / gscFirst.impressions) * 100) : undefined;
+      const ctrChange = gscFirst?.ctr && gscLast?.ctr ? 
+        Math.round(((gscLast.ctr - gscFirst.ctr) / gscFirst.ctr) * 100) : undefined;
+      
+      // Calculate raw changes for GSC metrics
+      const clicksChangeValue = gscFirst?.clicks && gscLast?.clicks ? 
+        gscLast.clicks - gscFirst.clicks : undefined;
+      const impressionsChangeValue = gscFirst?.impressions && gscLast?.impressions ? 
+        gscLast.impressions - gscFirst.impressions : undefined;
+      const ctrChangeValue = gscFirst?.ctr && gscLast?.ctr ? 
+        gscLast.ctr - gscFirst.ctr : undefined;
+      
+      // For Ahrefs, use comparison data from CSV if available, otherwise calculate
+      const ahrefsItem = ahrefsItems[0]; // Get any Ahrefs item for comparison data
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const trafficChange = ahrefsItem ? (ahrefsItem as any).trafficChange : undefined;
-
+      const ahrefsItemAny = ahrefsItem as any;
+      
+      // Position changes (Ahrefs) - use CSV comparison data if available
+      const positionFirst = ahrefsItemAny?.previousPosition || ahrefsFirst?.position;
+      const positionLast = ahrefsItemAny?.position || ahrefsLast?.position; // Current position
+      const positionChangeValue = ahrefsItemAny?.positionChange || 
+        (positionFirst && positionLast ? positionLast - positionFirst : undefined);
+      const positionChange = positionFirst && positionLast ? 
+        Math.round(((positionLast - positionFirst) / positionFirst) * 100) : undefined;
+      
+      // Traffic changes (Ahrefs) - use CSV comparison data if available
+      const trafficFirst = ahrefsItemAny?.previousTraffic || ahrefsFirst?.traffic;
+      const trafficLast = ahrefsItemAny?.traffic || ahrefsLast?.traffic; // Current traffic
+      const trafficChangeValue = ahrefsItemAny?.trafficChange || 
+        (trafficFirst && trafficLast ? trafficLast - trafficFirst : undefined);
+      const trafficChange = ahrefsItemAny?.trafficChange; // Use CSV percentage if available
+      
       return {
         query,
         url,
@@ -237,12 +282,34 @@ export function prepareTableData(data: NormalizedMetric[], enableComparison = fa
         position: latest.position ? Math.round(latest.position * 10) / 10 : undefined,
         volume: latest.volume || undefined,
         source: sourceDisplay,
-        change: trafficChange || undefined, // Only show Ahrefs traffic change
-        // Additional comparison data (could be used for expanded view)
+        serpFeatures,
+        change: trafficChange || undefined, // Ahrefs traffic change percentage
+        
+        // Additional comparison data for the new table structure
         clicksChange,
         impressionsChange,
         ctrChange,
         positionChange,
+        
+        // First and last date values for each metric
+        clicksFirst: gscFirst?.clicks,
+        clicksLast: gscLast?.clicks,
+        impressionsFirst: gscFirst?.impressions,
+        impressionsLast: gscLast?.impressions,
+        ctrFirst: gscFirst?.ctr ? Math.round(gscFirst.ctr * 10000) / 100 : undefined,
+        ctrLast: gscLast?.ctr ? Math.round(gscLast.ctr * 10000) / 100 : undefined,
+        
+        positionFirst: positionFirst ? Math.round(positionFirst * 10) / 10 : undefined,
+        positionLast: positionLast ? Math.round(positionLast * 10) / 10 : undefined,
+        trafficFirst,
+        trafficLast,
+        
+        // Raw change values (not percentages)
+        clicksChangeValue,
+        impressionsChangeValue,
+        ctrChangeValue,
+        positionChangeValue,
+        trafficChangeValue,
       };
     } else {
       // For non-comparison mode: use most recent data
@@ -258,6 +325,7 @@ export function prepareTableData(data: NormalizedMetric[], enableComparison = fa
         position: mostRecent.position ? Math.round(mostRecent.position * 10) / 10 : undefined,
         volume: mostRecent.volume || undefined,
         source: sourceDisplay,
+        serpFeatures,
         change: undefined, // No change column in non-comparison mode
       };
     }

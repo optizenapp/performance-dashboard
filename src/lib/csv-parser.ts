@@ -13,21 +13,22 @@ export interface CSVParseResult {
  * Common Ahrefs CSV column mappings
  */
 const AHREFS_COLUMN_MAPPINGS = {
-  // Map to the specific Ahrefs export columns
-  keyword: ['keyword', 'query', 'search term', 'term'],
-  url: ['current url', 'url', 'page', 'landing page', 'target url', 'current url inside'],
-  position: ['current position', 'position', 'rank', 'ranking'],
-  volume: ['volume', 'search volume', 'monthly searches', 'searches'],
-  difficulty: ['kd', 'difficulty', 'keyword difficulty', 'competition'],
-  cpc: ['cpc', 'cost per click', 'avg cpc', 'price'],
-  traffic: ['current organic traffic', 'organic traffic', 'traffic', 'estimated traffic', 'visits'],
-  date: ['current date', 'date', 'month', 'period', 'time'],
+  // Map to the exact Ahrefs export columns from your CSV
+  keyword: ['Keyword'],
+  url: ['Current URL'], // Exact match for 'Current URL' column
+  position: ['Current position'],
+  volume: ['Volume'],
+  difficulty: ['KD'],
+  cpc: ['CPC'],
+  traffic: ['Current organic traffic'],
+  date: ['Current date'],
+  serpFeatures: ['SERP features'], // Add SERP features mapping
   // Comparison columns
-  previousTraffic: ['previous organic traffic', 'prev organic traffic', 'previous traffic'],
-  trafficChange: ['organic traffic change', 'traffic change', 'traffic diff'],
-  previousPosition: ['previous position', 'prev position', 'previous rank'],
-  positionChange: ['position change', 'rank change', 'position diff'],
-  previousDate: ['previous date', 'prev date', 'previous period'],
+  previousTraffic: ['Previous organic traffic'],
+  trafficChange: ['Organic traffic change'],
+  previousPosition: ['Previous position'],
+  positionChange: ['Position change'],
+  previousDate: ['Previous date'],
 };
 
 /**
@@ -37,11 +38,20 @@ function findColumnMatch(headers: string[], fieldMappings: string[]): string | n
   const normalizedHeaders = headers.map(h => h.toLowerCase().trim());
   
   for (const mapping of fieldMappings) {
-    const index = normalizedHeaders.findIndex(header => 
-      header.includes(mapping.toLowerCase()) || mapping.toLowerCase().includes(header)
+    const mappingLower = mapping.toLowerCase();
+    
+    // First, try to find an exact match
+    const exactIndex = normalizedHeaders.findIndex(header => header === mappingLower);
+    if (exactIndex !== -1) {
+      return headers[exactIndex];
+    }
+    
+    // Then try substring matching
+    const substringIndex = normalizedHeaders.findIndex(header => 
+      header.includes(mappingLower) || mappingLower.includes(header)
     );
-    if (index !== -1) {
-      return headers[index];
+    if (substringIndex !== -1) {
+      return headers[substringIndex];
     }
   }
   
@@ -115,6 +125,7 @@ export function parseAhrefsCSV(csvContent: string): Promise<CSVParseResult> {
             cpc: findColumnMatch(headers, AHREFS_COLUMN_MAPPINGS.cpc),
             traffic: findColumnMatch(headers, AHREFS_COLUMN_MAPPINGS.traffic),
             date: findColumnMatch(headers, AHREFS_COLUMN_MAPPINGS.date),
+            serpFeatures: findColumnMatch(headers, AHREFS_COLUMN_MAPPINGS.serpFeatures),
             // Comparison columns
             previousTraffic: findColumnMatch(headers, AHREFS_COLUMN_MAPPINGS.previousTraffic),
             trafficChange: findColumnMatch(headers, AHREFS_COLUMN_MAPPINGS.trafficChange),
@@ -122,6 +133,13 @@ export function parseAhrefsCSV(csvContent: string): Promise<CSVParseResult> {
             positionChange: findColumnMatch(headers, AHREFS_COLUMN_MAPPINGS.positionChange),
             previousDate: findColumnMatch(headers, AHREFS_COLUMN_MAPPINGS.previousDate),
           };
+
+          // Debug logging for column mapping
+          console.log('Ahrefs CSV Debug:', {
+            headers,
+            columnMappings,
+            sampleRow: data[0]
+          });
 
           // Check if we have required columns
           if (!columnMappings.keyword) {
@@ -154,7 +172,19 @@ export function parseAhrefsCSV(csvContent: string): Promise<CSVParseResult> {
                 return;
               }
 
-              const position = columnMappings.position ? parseNumericValue(row[columnMappings.position]) : undefined;
+              const positionRaw = columnMappings.position ? row[columnMappings.position] : undefined;
+              const position = columnMappings.position && positionRaw !== undefined ? parseNumericValue(positionRaw) : undefined;
+              
+              // Debug position parsing
+              if (index < 5) { // Log first 5 rows for debugging
+                console.log(`Row ${index + 2} position debug:`, {
+                  keyword,
+                  positionColumn: columnMappings.position,
+                  positionRaw,
+                  positionParsed: position,
+                  rowData: row
+                });
+              }
 
               const ahrefsMetric: AhrefsMetric = {
                 date: columnMappings.date 
@@ -167,6 +197,7 @@ export function parseAhrefsCSV(csvContent: string): Promise<CSVParseResult> {
                 difficulty: columnMappings.difficulty ? parseNumericValue(row[columnMappings.difficulty]) : undefined,
                 cpc: columnMappings.cpc ? parseNumericValue(row[columnMappings.cpc]) : undefined,
                 traffic: columnMappings.traffic ? parseNumericValue(row[columnMappings.traffic]) : undefined,
+                serpFeatures: columnMappings.serpFeatures ? row[columnMappings.serpFeatures]?.toString().trim() : undefined,
                 // Comparison fields
                 previousTraffic: columnMappings.previousTraffic ? parseNumericValue(row[columnMappings.previousTraffic]) : undefined,
                 trafficChange: columnMappings.trafficChange ? parseNumericValue(row[columnMappings.trafficChange]) : undefined,
@@ -181,7 +212,18 @@ export function parseAhrefsCSV(csvContent: string): Promise<CSVParseResult> {
                 processedData.push(validated.data);
                 validRows++;
               } else {
-                errors.push(`Row ${index + 2}: ${validated.error.issues.map(e => e.message).join(', ')}`);
+                const errorMsg = `Row ${index + 2}: ${validated.error.issues.map(e => e.message).join(', ')}`;
+                errors.push(errorMsg);
+                
+                // Debug validation failures for position-related issues
+                if (index < 5 || validated.error.issues.some(issue => issue.path.includes('position'))) {
+                  console.log('Zod validation failed:', {
+                    keyword,
+                    ahrefsMetric,
+                    validationErrors: validated.error.issues,
+                    errorMsg
+                  });
+                }
               }
             } catch (error) {
               errors.push(`Row ${index + 2}: ${error instanceof Error ? error.message : 'Unknown error'}`);

@@ -19,9 +19,7 @@ import {
   ArrowDown, 
   Search, 
   Download,
-  ExternalLink,
-  TrendingUp,
-  TrendingDown
+  ExternalLink
 } from 'lucide-react';
 import { TableRow as TableRowType } from '@/lib/types';
 import { formatMetricValue, exportToCSV } from '@/lib/data-utils';
@@ -33,7 +31,6 @@ interface DataTableProps {
   description?: string;
   loading?: boolean;
   onExport?: (format: 'csv' | 'json') => void;
-  enableComparison?: boolean;
 }
 
 type SortField = keyof TableRowType;
@@ -45,7 +42,6 @@ export function DataTable({
   description = 'Detailed metrics for your queries and pages',
   loading = false,
   onExport,
-  enableComparison = false,
 }: DataTableProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [sortField, setSortField] = useState<SortField>('clicks');
@@ -143,18 +139,6 @@ export function DataTable({
     }
   };
 
-  const getChangeIcon = (change?: number) => {
-    if (!change) return null;
-    if (change > 0) {
-      return <TrendingUp className="h-3 w-3 text-green-600" />;
-    }
-    return <TrendingDown className="h-3 w-3 text-red-600" />;
-  };
-
-  const getChangeColor = (change?: number) => {
-    if (!change) return 'text-gray-500';
-    return change > 0 ? 'text-green-600' : 'text-red-600';
-  };
 
   if (loading) {
     return (
@@ -246,7 +230,7 @@ export function DataTable({
                     {getSortIcon('query')}
                   </Button>
                 </TableHead>
-                <TableHead className="w-[200px]">
+                <TableHead className="w-[180px]">
                   <Button
                     variant="ghost"
                     onClick={() => handleSort('url')}
@@ -254,6 +238,16 @@ export function DataTable({
                   >
                     URL
                     {getSortIcon('url')}
+                  </Button>
+                </TableHead>
+                <TableHead>
+                  <Button
+                    variant="ghost"
+                    onClick={() => handleSort('serpFeatures')}
+                    className="h-auto p-0 font-semibold"
+                  >
+                    SERP Features
+                    {getSortIcon('serpFeatures')}
                   </Button>
                 </TableHead>
                 <TableHead>
@@ -307,15 +301,6 @@ export function DataTable({
                   </Button>
                 </TableHead>
                 <TableHead>Source</TableHead>
-                {enableComparison && (
-                  <>
-                    <TableHead>Clicks Change</TableHead>
-                    <TableHead>Impressions Change</TableHead>
-                    <TableHead>CTR Change</TableHead>
-                    <TableHead>Position Change</TableHead>
-                  </>
-                )}
-                <TableHead>Traffic Change</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -324,22 +309,43 @@ export function DataTable({
                   <TableCell className="font-medium">
                     {row.query}
                   </TableCell>
-                  <TableCell>
+                  <TableCell className="w-[180px] relative group">
                     {row.url ? (
-                      <a
-                        href={row.url.startsWith('http') ? row.url : `https://${row.url}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex items-center space-x-1 text-sm text-blue-600 hover:text-blue-800 hover:underline"
-                        title={row.url}
-                      >
-                        <ExternalLink className="h-3 w-3" />
-                        <span className="truncate max-w-[180px]">
-                          {row.url}
-                        </span>
-                      </a>
+                      <div className="relative">
+                        <div className="flex items-center space-x-1 text-sm">
+                          <ExternalLink className="h-3 w-3 text-gray-400" />
+                          <span className="truncate text-blue-600">
+                            {row.url.replace(/^https?:\/\//, '').split('/')[0]}
+                          </span>
+                        </div>
+                        
+                        {/* Hover tooltip with full clickable URL */}
+                        <div className="absolute left-0 top-full mt-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg shadow-lg p-3 z-50 min-w-[300px] max-w-[500px] opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200">
+                          <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">Full URL:</div>
+                          <a
+                            href={row.url.startsWith('http') ? row.url : `https://${row.url}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-sm text-blue-600 hover:text-blue-800 hover:underline break-all"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            {row.url}
+                          </a>
+                        </div>
+                      </div>
                     ) : (
                       <span className="text-gray-400 text-sm">N/A</span>
+                    )}
+                  </TableCell>
+                  <TableCell className="max-w-[200px]">
+                    {row.serpFeatures ? (
+                      <div className="text-sm text-gray-700 dark:text-gray-300">
+                        <span className="truncate block" title={row.serpFeatures}>
+                          {row.serpFeatures}
+                        </span>
+                      </div>
+                    ) : (
+                      <span className="text-gray-400 text-sm">-</span>
                     )}
                   </TableCell>
                   <TableCell>
@@ -365,7 +371,7 @@ export function DataTable({
                     {row.volume !== undefined ? formatMetricValue(row.volume, 'volume') : '-'}
                   </TableCell>
                   <TableCell>
-                    <Badge 
+                    <Badge
                       variant="secondary"
                       className={cn(
                         row.source === 'gsc' ? 'bg-blue-100 text-blue-800' : 'bg-orange-100 text-orange-800'
@@ -373,75 +379,6 @@ export function DataTable({
                     >
                       {row.source.toUpperCase()}
                     </Badge>
-                  </TableCell>
-                  {enableComparison && (
-                    <>
-                      {/* Clicks Change */}
-                      <TableCell>
-                        {row.clicksChange !== undefined ? (
-                          <div className={cn('flex items-center space-x-1', getChangeColor(row.clicksChange))}>
-                            {getChangeIcon(row.clicksChange)}
-                            <span className="text-sm font-medium">
-                              {row.clicksChange > 0 ? '+' : ''}{row.clicksChange}%
-                            </span>
-                          </div>
-                        ) : (
-                          <span className="text-gray-400">-</span>
-                        )}
-                      </TableCell>
-                      {/* Impressions Change */}
-                      <TableCell>
-                        {row.impressionsChange !== undefined ? (
-                          <div className={cn('flex items-center space-x-1', getChangeColor(row.impressionsChange))}>
-                            {getChangeIcon(row.impressionsChange)}
-                            <span className="text-sm font-medium">
-                              {row.impressionsChange > 0 ? '+' : ''}{row.impressionsChange}%
-                            </span>
-                          </div>
-                        ) : (
-                          <span className="text-gray-400">-</span>
-                        )}
-                      </TableCell>
-                      {/* CTR Change */}
-                      <TableCell>
-                        {row.ctrChange !== undefined ? (
-                          <div className={cn('flex items-center space-x-1', getChangeColor(row.ctrChange))}>
-                            {getChangeIcon(row.ctrChange)}
-                            <span className="text-sm font-medium">
-                              {row.ctrChange > 0 ? '+' : ''}{row.ctrChange}%
-                            </span>
-                          </div>
-                        ) : (
-                          <span className="text-gray-400">-</span>
-                        )}
-                      </TableCell>
-                      {/* Position Change */}
-                      <TableCell>
-                        {row.positionChange !== undefined ? (
-                          <div className={cn('flex items-center space-x-1', getChangeColor(-row.positionChange))}>
-                            {getChangeIcon(-row.positionChange)}
-                            <span className="text-sm font-medium">
-                              {row.positionChange > 0 ? '+' : ''}{row.positionChange}%
-                            </span>
-                          </div>
-                        ) : (
-                          <span className="text-gray-400">-</span>
-                        )}
-                      </TableCell>
-                    </>
-                  )}
-                  {/* Traffic Change (Ahrefs only) */}
-                  <TableCell>
-                    {row.change !== undefined ? (
-                      <div className={cn('flex items-center space-x-1', getChangeColor(row.change))}>
-                        {getChangeIcon(row.change)}
-                        <span className="text-sm font-medium">
-                          {row.change > 0 ? '+' : ''}{row.change}%
-                        </span>
-                      </div>
-                    ) : (
-                      <span className="text-gray-400">-</span>
-                    )}
                   </TableCell>
                 </TableRow>
               ))}

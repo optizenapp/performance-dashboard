@@ -122,29 +122,30 @@ export function FilterPanel({
         </div>
       </div>
 
-      {/* Date Range */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Date Range</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <DateRangePicker
-            dateRange={filters.dateRange}
-            onDateRangeChange={(dateRange) => updateFilters({ dateRange })}
-          />
-          
-        </CardContent>
-      </Card>
+      {/* Date Range and Comparison Side by Side */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Date Range */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Date Range</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <DateRangePicker
+              dateRange={filters.dateRange}
+              onDateRangeChange={(dateRange) => updateFilters({ dateRange })}
+            />
+          </CardContent>
+        </Card>
 
-      {/* Comparison Settings */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Comparison</CardTitle>
-          <CardDescription>
-            Compare your data against previous periods
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
+        {/* Comparison Settings */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Comparison</CardTitle>
+            <CardDescription>
+              Compare your data against previous periods
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
           {/* Enable Comparison Toggle */}
           <div className="flex items-center justify-between">
             <Label htmlFor="enable-comparison">Enable Comparison</Label>
@@ -153,7 +154,7 @@ export function FilterPanel({
               type="checkbox"
               checked={filters.enableComparison || false}
               onChange={(e) => updateFilters({ enableComparison: e.target.checked })}
-              className="h-4 w-4"
+              className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 dark:focus:ring-blue-600 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600"
             />
           </div>
 
@@ -189,7 +190,7 @@ export function FilterPanel({
                             });
                           }
                         }}
-                        className="w-4 h-4"
+                        className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 focus:ring-blue-500 dark:focus:ring-blue-600 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600"
                       />
                       <span className="text-sm">{preset.label}</span>
                     </label>
@@ -220,6 +221,7 @@ export function FilterPanel({
           )}
         </CardContent>
       </Card>
+      </div>
 
       {/* Metrics Selector */}
       <MetricSelector

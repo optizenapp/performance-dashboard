@@ -12,6 +12,7 @@ import { parseAhrefsCSV, validateCSVFile, readFileAsText } from '@/lib/csv-parse
 import { FilterPanel } from '@/components/filters/filter-panel';
 import { PerformanceChart } from '@/components/charts/performance-chart';
 import { DataTable } from '@/components/tables/data-table';
+import { ComparisonDataTable } from '@/components/tables/comparison-data-table';
 import { GSCConnection } from '@/components/gsc/gsc-connection';
 import { PerformanceClusters } from '@/components/clusters/performance-clusters';
 import { saveDataToStorage, loadDataFromStorage, hasStoredData, clearStoredData } from '@/lib/data-storage';
@@ -27,6 +28,7 @@ export default function Dashboard() {
     if (selectedChartMetrics.includes('volume') || selectedChartMetrics.includes('traffic')) {
       setSelectedChartMetrics(prev => prev.filter(metric => metric !== 'volume' && metric !== 'traffic'));
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // Remove dependency to prevent infinite loop
   const [filters, setFilters] = useState<FilterOptions>({
     dateRange: getDateRangePreset('last_30_days'),
@@ -570,13 +572,23 @@ search console api,https://example.com/api-docs,12,500,25,3.20,80,2024-01-01,60,
               </div>
             </CardHeader>
             <CardContent>
-              <DataTable
-                data={filteredTableData}
-                loading={loading}
-                title=""
-                description=""
-                enableComparison={filters.enableComparison}
-              />
+              {filters.enableComparison ? (
+                <ComparisonDataTable
+                  data={filteredTableData}
+                  loading={loading}
+                  title=""
+                  description=""
+                  comparisonStartDate={filters.comparisonDateRange?.startDate || filters.dateRange.startDate}
+                  comparisonEndDate={filters.comparisonDateRange?.endDate || filters.dateRange.endDate}
+                />
+              ) : (
+                <DataTable
+                  data={filteredTableData}
+                  loading={loading}
+                  title=""
+                  description=""
+                />
+              )}
             </CardContent>
           </Card>
 

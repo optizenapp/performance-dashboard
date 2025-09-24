@@ -35,6 +35,7 @@ export const AhrefsMetricSchema = z.object({
   difficulty: z.number().optional(),
   cpc: z.number().optional(),
   traffic: z.number().optional(),
+  serpFeatures: z.string().optional(),
   // Comparison fields
   previousTraffic: z.number().optional(),
   trafficChange: z.number().optional(),
@@ -82,6 +83,7 @@ export const NormalizedMetricSchema = z.object({
   difficulty: z.number().optional(),
   cpc: z.number().optional(),
   traffic: z.number().optional(),
+  serpFeatures: z.string().optional(),
 });
 
 // Filter Types
@@ -132,6 +134,7 @@ export const TableRowSchema = z.object({
   position: z.number().optional(),
   volume: z.number().optional(),
   source: z.string(),
+  serpFeatures: z.string().optional(),
   change: z.number().optional(), // traffic change from Ahrefs (only when comparison enabled)
   // Additional comparison fields for potential future use
   clicksChange: z.number().optional(),
