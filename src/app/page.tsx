@@ -269,19 +269,14 @@ search console api,/api-docs,12,500,25,3.20,80,2024-01-01`;
           </div>
         </div>
 
-        {/* Date Range Controls */}
+        {/* Filters and Controls */}
         <div className="mb-8">
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border p-6">
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-              Date Range
-            </h2>
-            <FilterPanel
-              filters={filters}
-              onFiltersChange={setFilters}
-              availableQueries={filterOptions.queries}
-              availableUrls={filterOptions.urls}
-            />
-          </div>
+          <FilterPanel
+            filters={filters}
+            onFiltersChange={setFilters}
+            availableQueries={filterOptions.queries}
+            availableUrls={filterOptions.urls}
+          />
         </div>
 
         {/* Quick Stats */}
