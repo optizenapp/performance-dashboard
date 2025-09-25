@@ -248,7 +248,11 @@ export default function Dashboard() {
       startDate: sectionFilters.quickView.dateRange.startDate,
       endDate: sectionFilters.quickView.dateRange.endDate,
       dataPoints: sectionFilteredData.quickView.length,
-      sampleData: sectionFilteredData.quickView.slice(0, 3)
+      sampleData: sectionFilteredData.quickView.slice(0, 3),
+      comparisonEnabled: sectionFilters.quickView.enableComparison,
+      comparisonPreset: sectionFilters.quickView.comparisonPreset,
+      totalDataPoints: data.length,
+      dateRangeInDays: Math.ceil((new Date(sectionFilters.quickView.dateRange.endDate).getTime() - new Date(sectionFilters.quickView.dateRange.startDate).getTime()) / (1000 * 60 * 60 * 24))
     });
 
     const stats = {
@@ -265,9 +269,10 @@ export default function Dashboard() {
       return stats;
     }
 
-    let positionSum = 0;
-    let positionCount = 0;
-
+    // Calculate Average Position correctly according to GSC methodology
+    // Group by query and find the topmost (best/lowest) position for each query
+    const queryPositions = new Map<string, number>();
+    
     console.log('🔍 Quick Overview position debugging:', {
       totalDataPoints: sectionFilteredData.quickView.length,
       gscDataPoints: sectionFilteredData.quickView.filter(item => item.source === SOURCES.GSC).length,
@@ -276,43 +281,106 @@ export default function Dashboard() {
         source: item.source,
         position: item.position,
         query: item.query?.substring(0, 20)
+      })),
+      dateRangeCheck: {
+        filterStart: sectionFilters.quickView.dateRange.startDate,
+        filterEnd: sectionFilters.quickView.dateRange.endDate,
+        actualDateRange: {
+          earliest: sectionFilteredData.quickView.length > 0 ? Math.min(...sectionFilteredData.quickView.map(item => new Date(item.date).getTime())) : null,
+          latest: sectionFilteredData.quickView.length > 0 ? Math.max(...sectionFilteredData.quickView.map(item => new Date(item.date).getTime())) : null
+        }
+      }
+    });
+    
+    if (sectionFilteredData.quickView.length > 0) {
+      const actualEarliest = new Date(Math.min(...sectionFilteredData.quickView.map(item => new Date(item.date).getTime()))).toISOString().split('T')[0];
+      const actualLatest = new Date(Math.max(...sectionFilteredData.quickView.map(item => new Date(item.date).getTime()))).toISOString().split('T')[0];
+      console.log('📅 Actual date range in filtered data:', {
+        earliest: actualEarliest,
+        latest: actualLatest,
+        expectedStart: sectionFilters.quickView.dateRange.startDate,
+        expectedEnd: sectionFilters.quickView.dateRange.endDate,
+        matchesExpected: actualEarliest === sectionFilters.quickView.dateRange.startDate && actualLatest === sectionFilters.quickView.dateRange.endDate
+      });
+    }
+
+    // Separate GSC time series data (for totals) from query-level data (for averages)
+    const gscTimeSeriesData = sectionFilteredData.quickView.filter(item => 
+      item.source === SOURCES.GSC && 
+      (item.query === 'Total' || item.query === '' || !item.query)
+    );
+    
+    const gscQueryData = sectionFilteredData.quickView.filter(item => 
+      item.source === SOURCES.GSC && 
+      item.query && 
+      item.query !== 'Total' && 
+      item.query !== ''
+    );
+    
+    const ahrefsData = sectionFilteredData.quickView.filter(item => item.source === SOURCES.AHREFS);
+    
+    console.log('📊 Data breakdown for Quick Overview:', {
+      gscTimeSeries: gscTimeSeriesData.length,
+      gscQueryLevel: gscQueryData.length, 
+      ahrefs: ahrefsData.length,
+      total: sectionFilteredData.quickView.length,
+      sampleTimeSeries: gscTimeSeriesData.slice(0, 3).map(item => ({
+        date: item.date,
+        clicks: item.clicks,
+        impressions: item.impressions,
+        query: item.query || 'Total'
       }))
     });
 
-    sectionFilteredData.quickView.forEach((item, index) => {
+    // Calculate totals from GSC time series data (daily aggregates)
+    gscTimeSeriesData.forEach(item => {
       stats.totalClicks += item.clicks || 0;
       stats.totalImpressions += item.impressions || 0;
+    });
+    
+    // Add Ahrefs data for volume and traffic
+    ahrefsData.forEach(item => {
       stats.totalVolume += item.volume || 0;
       stats.totalTraffic += item.traffic || 0;
+    });
 
-      // Only use GSC data for position calculation (Average Position)
-      if (item.position && item.position > 0 && item.source === SOURCES.GSC) {
-        positionSum += item.position;
-        positionCount++;
+    // Calculate Average Position from query-level GSC data (using correct methodology)
+    gscQueryData.forEach((item, index) => {
+      if (item.position && item.position > 0 && item.query) {
+        const currentBest = queryPositions.get(item.query);
+        // Store the topmost (lowest number = better) position for each query
+        if (!currentBest || item.position < currentBest) {
+          queryPositions.set(item.query, item.position);
+        }
         
         // Debug first few position entries
         if (index < 5) {
-          console.log(`📊 Position ${positionCount}:`, {
+          console.log(`📊 Position entry ${index}:`, {
+            query: item.query?.substring(0, 30),
             position: item.position,
-            query: item.query?.substring(0, 20),
+            currentBest: currentBest,
+            willUpdate: !currentBest || item.position < currentBest,
             date: item.date,
-            runningSum: positionSum,
-            runningAvg: (positionSum / positionCount).toFixed(2)
+            source: item.source
           });
         }
-      } else if (item.source === SOURCES.GSC && index < 5) {
-        console.log(`⚠️ GSC item without valid position:`, {
+      } else if (index < 5) {
+        console.log(`⚠️ GSC query item without valid position:`, {
           position: item.position,
           query: item.query?.substring(0, 20),
           date: item.date,
           hasPosition: !!item.position,
-          positionValue: item.position
+          positionValue: item.position,
+          hasQuery: !!item.query
         });
       }
     });
 
-    // Calculate average position from filtered data
-    stats.avgPosition = positionCount > 0 ? positionSum / positionCount : 0;
+    // Calculate average position from topmost positions per query (GSC methodology)
+    const topmostPositions = Array.from(queryPositions.values());
+    stats.avgPosition = topmostPositions.length > 0 
+      ? topmostPositions.reduce((sum, pos) => sum + pos, 0) / topmostPositions.length 
+      : 0;
     
     // Calculate CTR from filtered data: CTR = Total Clicks / Total Impressions
     stats.avgCTR = stats.totalImpressions > 0 ? stats.totalClicks / stats.totalImpressions : 0;
@@ -323,11 +391,21 @@ export default function Dashboard() {
       calculatedCTR: stats.avgCTR,
       calculatedCTRPercent: (stats.avgCTR * 100).toFixed(2) + '%',
       avgPosition: stats.avgPosition.toFixed(2),
-      positionDataPoints: positionCount
+      dataSourceBreakdown: {
+        clicksFrom: 'GSC Time Series',
+        impressionsFrom: 'GSC Time Series', 
+        ctrFrom: 'Calculated (Clicks/Impressions)',
+        positionFrom: 'GSC Query Data (Topmost per query)',
+        timeSeriesDataPoints: gscTimeSeriesData.length,
+        queryDataPoints: gscQueryData.length,
+        uniqueQueries: queryPositions.size
+      },
+      topmostPositions: topmostPositions.slice(0, 10), // Show first 10 for debugging
+      totalGSCDataPoints: sectionFilteredData.quickView.filter(item => item.source === SOURCES.GSC).length
     });
 
     return stats;
-  }, [sectionFilteredData.quickView, sectionFilters.quickView.dateRange]);
+  }, [sectionFilteredData.quickView, sectionFilters.quickView.dateRange, sectionFilters.quickView.enableComparison, sectionFilters.quickView.comparisonPreset, data.length]);
 
   // Comparison stats for Quick Overview (when comparison is enabled)
   const quickViewComparisonStats = useMemo(() => {
@@ -378,22 +456,56 @@ export default function Dashboard() {
       return { current: quickViewStats, previous: comparisonStats, changes: null };
     }
 
-    let positionSum = 0;
-    let positionCount = 0;
+    // Separate GSC time series data (for totals) from query-level data (for averages) - COMPARISON PERIOD
+    const comparisonGscTimeSeriesData = comparisonData.filter(item => 
+      item.source === SOURCES.GSC && 
+      (item.query === 'Total' || item.query === '' || !item.query)
+    );
+    
+    const comparisonGscQueryData = comparisonData.filter(item => 
+      item.source === SOURCES.GSC && 
+      item.query && 
+      item.query !== 'Total' && 
+      item.query !== ''
+    );
+    
+    console.log('📊 Comparison data breakdown:', {
+      gscTimeSeries: comparisonGscTimeSeriesData.length,
+      gscQueryLevel: comparisonGscQueryData.length,
+      total: comparisonData.length,
+      sampleTimeSeries: comparisonGscTimeSeriesData.slice(0, 3).map(item => ({
+        date: item.date,
+        clicks: item.clicks,
+        impressions: item.impressions,
+        query: item.query || 'Total'
+      }))
+    });
 
-    comparisonData.forEach(item => {
+    // Calculate totals from GSC time series data (daily aggregates) - COMPARISON PERIOD
+    comparisonGscTimeSeriesData.forEach(item => {
       comparisonStats.totalClicks += item.clicks || 0;
       comparisonStats.totalImpressions += item.impressions || 0;
+    });
 
-      // Only use GSC data for position calculation
-      if (item.position && item.position > 0 && item.source === SOURCES.GSC) {
-        positionSum += item.position;
-        positionCount++;
+    // Calculate Average Position for comparison period using GSC methodology
+    const comparisonQueryPositions = new Map<string, number>();
+
+    comparisonGscQueryData.forEach(item => {
+      // Only use GSC query data for position calculation - group by query and find topmost position
+      if (item.position && item.position > 0 && item.query) {
+        const currentBest = comparisonQueryPositions.get(item.query);
+        // Store the topmost (lowest number = better) position for each query
+        if (!currentBest || item.position < currentBest) {
+          comparisonQueryPositions.set(item.query, item.position);
+        }
       }
     });
 
-    // Calculate comparison period metrics
-    comparisonStats.avgPosition = positionCount > 0 ? positionSum / positionCount : 0;
+    // Calculate comparison period average position from topmost positions per query
+    const comparisonTopmostPositions = Array.from(comparisonQueryPositions.values());
+    comparisonStats.avgPosition = comparisonTopmostPositions.length > 0 
+      ? comparisonTopmostPositions.reduce((sum, pos) => sum + pos, 0) / comparisonTopmostPositions.length 
+      : 0;
     comparisonStats.avgCTR = comparisonStats.totalImpressions > 0 ? comparisonStats.totalClicks / comparisonStats.totalImpressions : 0;
 
     // Calculate percentage changes
@@ -411,7 +523,9 @@ export default function Dashboard() {
     console.log('📈 Comparison results:', {
       current: quickViewStats,
       previous: comparisonStats,
-      changes
+      changes,
+      comparisonQueries: comparisonQueryPositions.size,
+      comparisonTopmostPositions: comparisonTopmostPositions.slice(0, 10)
     });
 
     return { current: quickViewStats, previous: comparisonStats, changes };
