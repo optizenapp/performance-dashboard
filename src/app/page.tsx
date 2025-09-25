@@ -345,6 +345,38 @@ export default function Dashboard() {
     });
 
     // Calculate Average Position from query-level GSC data (using correct methodology)
+    // Check date distribution in query-level data
+    const queryDataDates = new Map<string, number>();
+    gscQueryData.forEach(item => {
+      const count = queryDataDates.get(item.date) || 0;
+      queryDataDates.set(item.date, count + 1);
+    });
+    
+    const timeSeriesDataDates = new Map<string, number>();
+    gscTimeSeriesData.forEach(item => {
+      const count = timeSeriesDataDates.get(item.date) || 0;
+      timeSeriesDataDates.set(item.date, count + 1);
+    });
+
+    console.log('🎯 Average Position debugging:', {
+      gscQueryDataCount: gscQueryData.length,
+      gscQueryDataSample: gscQueryData.slice(0, 5).map(item => ({
+        query: item.query?.substring(0, 30),
+        position: item.position,
+        date: item.date,
+        hasPosition: !!item.position,
+        positionType: typeof item.position,
+        positionValue: item.position
+      })),
+      queryDataDateDistribution: Object.fromEntries(queryDataDates.entries()),
+      timeSeriesDateDistribution: Object.fromEntries(timeSeriesDataDates.entries()),
+      dateRangeFilter: {
+        start: sectionFilters.quickView.dateRange.startDate,
+        end: sectionFilters.quickView.dateRange.endDate,
+        daysInRange: Math.ceil((new Date(sectionFilters.quickView.dateRange.endDate).getTime() - new Date(sectionFilters.quickView.dateRange.startDate).getTime()) / (1000 * 60 * 60 * 24))
+      }
+    });
+
     gscQueryData.forEach((item, index) => {
       if (item.position && item.position > 0 && item.query) {
         const currentBest = queryPositions.get(item.query);
@@ -371,7 +403,8 @@ export default function Dashboard() {
           date: item.date,
           hasPosition: !!item.position,
           positionValue: item.position,
-          hasQuery: !!item.query
+          hasQuery: !!item.query,
+          positionType: typeof item.position
         });
       }
     });
@@ -381,6 +414,96 @@ export default function Dashboard() {
     stats.avgPosition = topmostPositions.length > 0 
       ? topmostPositions.reduce((sum, pos) => sum + pos, 0) / topmostPositions.length 
       : 0;
+      
+    console.log('🎯 Average Position calculation result:', {
+      queryPositionsMapSize: queryPositions.size,
+      topmostPositionsArray: topmostPositions,
+      calculatedAvgPosition: stats.avgPosition,
+      hasValidPosition: stats.avgPosition > 0,
+      queryPositionsMap: Object.fromEntries(Array.from(queryPositions.entries()).slice(0, 10)) // Show first 10 queries
+    });
+    
+    // Check if we have sufficient date coverage for position data
+    const dateRangeStart = new Date(sectionFilters.quickView.dateRange.startDate);
+    const dateRangeEnd = new Date(sectionFilters.quickView.dateRange.endDate);
+    const totalDaysInRange = Math.ceil((dateRangeEnd.getTime() - dateRangeStart.getTime()) / (1000 * 60 * 60 * 24));
+    const daysWithQueryData = queryDataDates.size;
+    const coveragePercentage = (daysWithQueryData / totalDaysInRange) * 100;
+    
+    console.log('📊 Position data coverage analysis:', {
+      totalDaysInRange,
+      daysWithQueryData,
+      coveragePercentage: coveragePercentage.toFixed(1) + '%',
+      sufficientCoverage: coveragePercentage >= 10, // At least 10% coverage
+      queryDataDates: Array.from(queryDataDates.keys()).sort()
+    });
+    
+    // If we have very limited date coverage, use a different approach
+    if (coveragePercentage < 10 && stats.avgPosition > 0) {
+      console.log('⚠️ Limited position data coverage, using time-weighted approach...');
+      
+      // Group position data by date and calculate daily averages
+      const dailyPositions = new Map<string, number[]>();
+      sectionFilteredData.quickView.forEach(item => {
+        if (item.source === SOURCES.GSC && item.position && item.position > 0) {
+          const positions = dailyPositions.get(item.date) || [];
+          positions.push(item.position);
+          dailyPositions.set(item.date, positions);
+        }
+      });
+      
+      // Calculate average position across all available dates
+      let totalWeightedPosition = 0;
+      let totalWeight = 0;
+      
+      dailyPositions.forEach((positions, date) => {
+        const dailyAvg = positions.reduce((sum, pos) => sum + pos, 0) / positions.length;
+        totalWeightedPosition += dailyAvg * positions.length; // Weight by number of queries
+        totalWeight += positions.length;
+      });
+      
+      if (totalWeight > 0) {
+        const timeWeightedAvgPosition = totalWeightedPosition / totalWeight;
+        console.log('🔄 Time-weighted position calculation:', {
+          originalAvgPosition: stats.avgPosition,
+          timeWeightedAvgPosition,
+          datesWithData: dailyPositions.size,
+          totalDataPoints: totalWeight,
+          dailyAverages: Object.fromEntries(
+            Array.from(dailyPositions.entries()).map(([date, positions]) => [
+              date, 
+              (positions.reduce((sum, pos) => sum + pos, 0) / positions.length).toFixed(2)
+            ])
+          )
+        });
+        
+        // Use time-weighted average if it's significantly different
+        stats.avgPosition = timeWeightedAvgPosition;
+      }
+    }
+    
+    // FALLBACK: If no position data at all, try using any GSC position data available
+    if (stats.avgPosition === 0) {
+      console.log('⚠️ No position data found, trying final fallback...');
+      
+      const allGSCPositions: number[] = [];
+      sectionFilteredData.quickView.forEach(item => {
+        if (item.source === SOURCES.GSC && item.position && item.position > 0) {
+          allGSCPositions.push(item.position);
+        }
+      });
+      
+      if (allGSCPositions.length > 0) {
+        stats.avgPosition = allGSCPositions.reduce((sum, pos) => sum + pos, 0) / allGSCPositions.length;
+        console.log('🔄 Final fallback position calculation:', {
+          positionDataPoints: allGSCPositions.length,
+          positions: allGSCPositions.slice(0, 10),
+          fallbackAvgPosition: stats.avgPosition
+        });
+      } else {
+        console.log('❌ No position data found in any GSC data');
+      }
+    }
     
     // Calculate CTR from filtered data: CTR = Total Clicks / Total Impressions
     stats.avgCTR = stats.totalImpressions > 0 ? stats.totalClicks / stats.totalImpressions : 0;
