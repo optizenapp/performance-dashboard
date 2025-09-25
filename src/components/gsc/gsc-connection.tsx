@@ -55,29 +55,34 @@ export function GSCConnection({ onDataFetch, dateRange: initialDateRange }: GSCC
     try {
       setFetchingData(true);
       
-      // Fetch both aggregated data (for tables) and time series data (for charts)
-      const [aggregatedData, timeSeriesData] = await Promise.all([
-        // Aggregated data for tables (query-level data without dates)
-        fetchData(dateRange.startDate, dateRange.endDate, ['query', 'page'], false),
-        // Time series data for charts (daily data points)
-        fetchData(dateRange.startDate, dateRange.endDate, ['date'], true)
-      ]);
+      // Fetch comprehensive data with date, query, and page dimensions
+      // This gives us daily data for each query, which is needed for accurate position calculation
+      const comprehensiveData = await fetchData(dateRange.startDate, dateRange.endDate, ['date', 'query', 'page'], false);
+
+      // We can derive time series from this data, but for simplicity, we'll also fetch it separately for now
+      // to ensure chart totals are accurate. GSC API handles this efficiently.
+      const timeSeriesData = await fetchData(dateRange.startDate, dateRange.endDate, ['date'], true);
       
-      // Combine both datasets
-      const combinedData = [...aggregatedData, ...timeSeriesData];
+      // Combine both datasets, ensuring no duplicates if any overlap exists
+      // A simple way is to use a Map to ensure unique entries if needed, but for now we combine and let processing handle it
+      const combinedData = [...comprehensiveData, ...timeSeriesData];
+      
+      // Create a Set of unique keys to avoid duplicate entries if any exist between the two fetches
+      const uniqueData = Array.from(new Map(combinedData.map(item => [`${item.date}-${item.query}-${item.url}`, item])).values());
       
       // Debug logging
       console.log('GSC Frontend Data:', {
-        aggregatedCount: aggregatedData.length,
+        comprehensiveCount: comprehensiveData.length,
         timeSeriesCount: timeSeriesData.length,
-        totalCount: combinedData.length,
-        aggregatedSample: aggregatedData.slice(0, 3),
+        totalCombined: combinedData.length,
+        totalUnique: uniqueData.length,
+        comprehensiveSample: comprehensiveData.slice(0, 3),
         timeSeriesSample: timeSeriesData.slice(0, 5),
         dateRange,
       });
       
       if (onDataFetch) {
-        onDataFetch(combinedData);
+        onDataFetch(uniqueData);
       }
     } catch (error) {
       console.error('Failed to fetch GSC data:', error);
