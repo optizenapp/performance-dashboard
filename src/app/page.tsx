@@ -270,8 +270,7 @@ export default function Dashboard() {
     }
 
     // Calculate Average Position correctly according to GSC methodology
-    // Group by query and find the topmost (best/lowest) position for each query
-    const queryPositions = new Map<string, number>();
+    // GSC methodology: "topmost position... averaged across all impressions"
     
     console.log('🔍 Quick Overview position debugging:', {
       totalDataPoints: sectionFilteredData.quickView.length,
@@ -377,12 +376,17 @@ export default function Dashboard() {
       }
     });
 
+    // GSC Average Position: "topmost position... averaged across all impressions"
+    // Each data point represents an impression, so we need to average across all impressions
+    const allImpressionPositions: number[] = [];
+    
     gscQueryData.forEach((item, index) => {
-      if (item.position && item.position > 0 && item.query) {
-        const currentBest = queryPositions.get(item.query);
-        // Store the topmost (lowest number = better) position for each query
-        if (!currentBest || item.position < currentBest) {
-          queryPositions.set(item.query, item.position);
+      if (item.position && item.position > 0 && item.query && item.impressions && item.impressions > 0) {
+        // Each item represents impressions for a query on a specific date
+        // We should weight the position by the number of impressions
+        // But since we don't have individual impression positions, we use the position for all impressions of this query/date
+        for (let i = 0; i < item.impressions; i++) {
+          allImpressionPositions.push(item.position);
         }
         
         // Debug first few position entries
@@ -390,18 +394,20 @@ export default function Dashboard() {
           console.log(`📊 Position entry ${index}:`, {
             query: item.query?.substring(0, 30),
             position: item.position,
-            currentBest: currentBest,
-            willUpdate: !currentBest || item.position < currentBest,
+            impressions: item.impressions,
+            contributedPositions: item.impressions,
             date: item.date,
             source: item.source
           });
         }
       } else if (index < 5) {
-        console.log(`⚠️ GSC query item without valid position:`, {
+        console.log(`⚠️ GSC query item without valid position/impressions:`, {
           position: item.position,
+          impressions: item.impressions,
           query: item.query?.substring(0, 20),
           date: item.date,
           hasPosition: !!item.position,
+          hasImpressions: !!item.impressions,
           positionValue: item.position,
           hasQuery: !!item.query,
           positionType: typeof item.position
@@ -409,18 +415,17 @@ export default function Dashboard() {
       }
     });
 
-    // Calculate average position from topmost positions per query (GSC methodology)
-    const topmostPositions = Array.from(queryPositions.values());
-    stats.avgPosition = topmostPositions.length > 0 
-      ? topmostPositions.reduce((sum, pos) => sum + pos, 0) / topmostPositions.length 
+    // Calculate average position across all impressions (true GSC methodology)
+    stats.avgPosition = allImpressionPositions.length > 0 
+      ? allImpressionPositions.reduce((sum, pos) => sum + pos, 0) / allImpressionPositions.length 
       : 0;
       
     console.log('🎯 Average Position calculation result:', {
-      queryPositionsMapSize: queryPositions.size,
-      topmostPositionsArray: topmostPositions,
+      totalImpressionPositions: allImpressionPositions.length,
       calculatedAvgPosition: stats.avgPosition,
       hasValidPosition: stats.avgPosition > 0,
-      queryPositionsMap: Object.fromEntries(Array.from(queryPositions.entries()).slice(0, 10)) // Show first 10 queries
+      samplePositions: allImpressionPositions.slice(0, 20), // Show first 20 impression positions
+      uniquePositionValues: [...new Set(allImpressionPositions)].sort((a, b) => a - b).slice(0, 10)
     });
     
     // Check if we have sufficient date coverage for position data
@@ -518,12 +523,11 @@ export default function Dashboard() {
         clicksFrom: 'GSC Time Series',
         impressionsFrom: 'GSC Time Series', 
         ctrFrom: 'Calculated (Clicks/Impressions)',
-        positionFrom: 'GSC Query Data (Topmost per query)',
+        positionFrom: 'GSC Query Data (Weighted by impressions)',
         timeSeriesDataPoints: gscTimeSeriesData.length,
         queryDataPoints: gscQueryData.length,
-        uniqueQueries: queryPositions.size
+        totalImpressionPositions: allImpressionPositions.length
       },
-      topmostPositions: topmostPositions.slice(0, 10), // Show first 10 for debugging
       totalGSCDataPoints: sectionFilteredData.quickView.filter(item => item.source === SOURCES.GSC).length
     });
 
@@ -610,24 +614,24 @@ export default function Dashboard() {
       comparisonStats.totalImpressions += item.impressions || 0;
     });
 
-    // Calculate Average Position for comparison period using GSC methodology
-    const comparisonQueryPositions = new Map<string, number>();
+    // Calculate Average Position for comparison period using true GSC methodology
+    // GSC Average Position: "topmost position... averaged across all impressions"
+    const comparisonImpressionPositions: number[] = [];
 
     comparisonGscQueryData.forEach(item => {
-      // Only use GSC query data for position calculation - group by query and find topmost position
-      if (item.position && item.position > 0 && item.query) {
-        const currentBest = comparisonQueryPositions.get(item.query);
-        // Store the topmost (lowest number = better) position for each query
-        if (!currentBest || item.position < currentBest) {
-          comparisonQueryPositions.set(item.query, item.position);
+      // Only use GSC query data for position calculation - weight by impressions
+      if (item.position && item.position > 0 && item.query && item.impressions && item.impressions > 0) {
+        // Each item represents impressions for a query on a specific date
+        // Weight the position by the number of impressions
+        for (let i = 0; i < item.impressions; i++) {
+          comparisonImpressionPositions.push(item.position);
         }
       }
     });
 
-    // Calculate comparison period average position from topmost positions per query
-    const comparisonTopmostPositions = Array.from(comparisonQueryPositions.values());
-    comparisonStats.avgPosition = comparisonTopmostPositions.length > 0 
-      ? comparisonTopmostPositions.reduce((sum, pos) => sum + pos, 0) / comparisonTopmostPositions.length 
+    // Calculate comparison period average position across all impressions (true GSC methodology)
+    comparisonStats.avgPosition = comparisonImpressionPositions.length > 0 
+      ? comparisonImpressionPositions.reduce((sum, pos) => sum + pos, 0) / comparisonImpressionPositions.length 
       : 0;
     comparisonStats.avgCTR = comparisonStats.totalImpressions > 0 ? comparisonStats.totalClicks / comparisonStats.totalImpressions : 0;
 
@@ -647,8 +651,8 @@ export default function Dashboard() {
       current: quickViewStats,
       previous: comparisonStats,
       changes,
-      comparisonQueries: comparisonQueryPositions.size,
-      comparisonTopmostPositions: comparisonTopmostPositions.slice(0, 10)
+      comparisonImpressionPositions: comparisonImpressionPositions.length,
+      comparisonSamplePositions: comparisonImpressionPositions.slice(0, 10)
     });
 
     return { current: quickViewStats, previous: comparisonStats, changes };
