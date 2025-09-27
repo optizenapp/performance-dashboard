@@ -1,4 +1,6 @@
-import { useState, useCallback } from 'react';
+'use client';
+
+import React, { createContext, useContext, useState, useCallback, ReactNode } from 'react';
 import { NormalizedMetric } from '@/lib/types';
 import { normalizeGSCData } from '@/lib/data-utils';
 
@@ -10,7 +12,25 @@ interface GSCState {
   error: string | null;
 }
 
-export function useGSC() {
+interface GSCContextType extends GSCState {
+  authenticate: () => Promise<boolean>;
+  handleCallback: (code: string) => Promise<boolean>;
+  checkAuthStatus: () => Promise<boolean>;
+  loadSites: () => Promise<void>;
+  fetchData: (
+    startDate: string,
+    endDate: string,
+    dimensions?: string[],
+    timeSeries?: boolean,
+    signal?: AbortSignal
+  ) => Promise<NormalizedMetric[]>;
+  selectSite: (siteUrl: string) => void;
+  disconnect: () => void;
+}
+
+const GSCContext = createContext<GSCContextType | null>(null);
+
+export function GSCProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<GSCState>({
     isAuthenticated: false,
     isLoading: false,
@@ -56,6 +76,24 @@ export function useGSC() {
           
           if (event.data.type === 'GSC_AUTH_SUCCESS') {
             cleanup();
+            
+            // Sync tokens to server
+            (async () => {
+              try {
+                const tokens = localStorage.getItem('gsc_tokens');
+                if (tokens) {
+                  await fetch('/api/gsc/auth/sync', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ tokens: JSON.parse(tokens) })
+                  });
+                  console.log('Tokens synced to server');
+                }
+              } catch (error) {
+                console.error('Failed to sync tokens to server:', error);
+              }
+            })();
+            
             setState(prev => ({ 
               ...prev, 
               isAuthenticated: true, 
@@ -73,10 +111,17 @@ export function useGSC() {
 
         // Check if popup was closed manually
         const checkClosed = setInterval(() => {
-          if (popup?.closed) {
-            cleanup();
-            setError('Authentication cancelled');
-            resolve(false);
+          try {
+            if (popup?.closed) {
+              cleanup();
+              setError('Authentication cancelled');
+              resolve(false);
+            }
+          } catch (error) {
+            // Cross-Origin-Opener-Policy blocks access to popup.closed
+            // This is expected in some browsers, so we'll ignore this error
+            // and rely on the message listener and timeout instead
+            console.debug('Cannot check popup.closed due to CORS policy (this is normal)');
           }
         }, 1000);
         
@@ -101,7 +146,6 @@ export function useGSC() {
       setError(error instanceof Error ? error.message : 'Authentication failed');
       return false;
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   /**
@@ -138,7 +182,6 @@ export function useGSC() {
       setError(error instanceof Error ? error.message : 'Authentication failed');
       return false;
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   /**
@@ -146,8 +189,31 @@ export function useGSC() {
    */
   const checkAuthStatus = useCallback(async () => {
     try {
+      console.log('🔐 [Global] Checking GSC authentication status...');
+      
+      // First, try to sync tokens if we have them in localStorage
+      const tokens = localStorage.getItem('gsc_tokens');
+      if (tokens) {
+        try {
+          await fetch('/api/gsc/auth/sync', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ tokens: JSON.parse(tokens) })
+          });
+          console.log('✅ [Global] Tokens synced to server during auth check');
+        } catch (error) {
+          console.error('❌ [Global] Failed to sync tokens during auth check:', error);
+        }
+      }
+      
       const response = await fetch('/api/gsc/sites');
       const isAuth = response.ok;
+      
+      console.log('🔐 [Global] Auth status check result:', {
+        isAuthenticated: isAuth,
+        response: response.status,
+        willLoadSites: isAuth
+      });
       
       setState(prev => ({ 
         ...prev, 
@@ -156,6 +222,7 @@ export function useGSC() {
       }));
       
       if (isAuth) {
+        console.log('🔄 [Global] Loading sites after auth check...');
         await loadSites();
       }
       
@@ -168,7 +235,6 @@ export function useGSC() {
       }));
       return false;
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   /**
@@ -178,20 +244,42 @@ export function useGSC() {
     try {
       setLoading(true);
       
+      console.log('🔄 [Global] Loading GSC sites...');
       const response = await fetch('/api/gsc/sites');
       const data = await response.json();
+      
+      console.log('📡 [Global] Sites API response:', {
+        status: response.status,
+        ok: response.ok,
+        data: data,
+        sitesCount: data.sites?.length || 0
+      });
       
       if (!response.ok) {
         throw new Error(data.error || 'Failed to load sites');
       }
       
-      setState(prev => ({ 
-        ...prev, 
-        sites: data.sites,
-        selectedSite: data.sites.length > 0 ? data.sites[0] : null,
-        isLoading: false,
-        error: null
-      }));
+      setState(prev => {
+        const newSelectedSite = prev.selectedSite && data.sites.includes(prev.selectedSite) 
+          ? prev.selectedSite  // Keep current selection if still available
+          : data.sites.length > 0 ? data.sites[0] : null; // Otherwise default to first
+        
+        console.log('🏠 [Global] Sites loaded, selection logic:', {
+          availableSites: data.sites.length,
+          previousSelection: prev.selectedSite,
+          newSelection: newSelectedSite,
+          selectionKept: prev.selectedSite === newSelectedSite,
+          timestamp: new Date().toISOString()
+        });
+        
+        return { 
+          ...prev, 
+          sites: data.sites,
+          selectedSite: newSelectedSite,
+          isLoading: false,
+          error: null
+        };
+      });
     } catch (error) {
       setError(error instanceof Error ? error.message : 'Failed to load sites');
     }
@@ -204,7 +292,8 @@ export function useGSC() {
     startDate: string,
     endDate: string,
     dimensions?: string[],
-    timeSeries?: boolean
+    timeSeries?: boolean,
+    signal?: AbortSignal
   ): Promise<NormalizedMetric[]> => {
     if (!state.selectedSite) {
       throw new Error('No site selected');
@@ -223,6 +312,7 @@ export function useGSC() {
           dimensions,
           timeSeries,
         }),
+        signal, // Pass the abort signal
       });
       
       const result = await response.json();
@@ -231,7 +321,7 @@ export function useGSC() {
         throw new Error(result.error || 'Failed to fetch data');
       }
       
-      setState(prev => ({ ...prev, isLoading: false, error: null }));
+      // Don't set loading false here - let the finally block handle it
       
       // Normalize GSC data to the common format
       const normalizedData = normalizeGSCData(result.data);
@@ -246,6 +336,8 @@ export function useGSC() {
     } catch (error) {
       setError(error instanceof Error ? error.message : 'Failed to fetch data');
       throw error;
+    } finally {
+      setLoading(false); // CRITICAL: Always set loading to false
     }
   }, [state.selectedSite]);
 
@@ -253,13 +345,19 @@ export function useGSC() {
    * Select a site
    */
   const selectSite = useCallback((siteUrl: string) => {
+    console.log('🌐 [Global] Site selection changed:', {
+      previous: state.selectedSite,
+      new: siteUrl,
+      timestamp: new Date().toISOString()
+    });
     setState(prev => ({ ...prev, selectedSite: siteUrl }));
-  }, []);
+  }, [state.selectedSite]);
 
   /**
    * Disconnect GSC
    */
   const disconnect = useCallback(() => {
+    console.log('🔌 [Global] Disconnecting GSC...');
     setState({
       isAuthenticated: false,
       isLoading: false,
@@ -272,7 +370,7 @@ export function useGSC() {
     localStorage.removeItem('gsc_tokens');
   }, []);
 
-  return {
+  const contextValue: GSCContextType = {
     ...state,
     authenticate,
     handleCallback,
@@ -282,4 +380,19 @@ export function useGSC() {
     selectSite,
     disconnect,
   };
+
+  return (
+    <GSCContext.Provider value={contextValue}>
+      {children}
+    </GSCContext.Provider>
+  );
 }
+
+export function useGSC() {
+  const context = useContext(GSCContext);
+  if (!context) {
+    throw new Error('useGSC must be used within a GSCProvider');
+  }
+  return context;
+}
+

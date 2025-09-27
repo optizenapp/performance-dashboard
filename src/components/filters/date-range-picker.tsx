@@ -19,12 +19,25 @@ interface DateRangePickerProps {
 
 export function DateRangePicker({ dateRange, onDateRangeChange, className }: DateRangePickerProps) {
   const [isOpen, setIsOpen] = useState(false);
-  const [selectedPreset, setSelectedPreset] = useState<string>('last_30_days');
+  const [selectedPreset, setSelectedPreset] = useState<string>('last_28_days');
 
   const handlePresetChange = (preset: string) => {
+    console.log('📅 DateRangePicker preset changed:', {
+      oldPreset: selectedPreset,
+      newPreset: preset,
+      isCustom: preset === DATE_PRESETS.CUSTOM
+    });
+    
     setSelectedPreset(preset);
     if (preset !== DATE_PRESETS.CUSTOM) {
       const newDateRange = getDateRangePreset(preset);
+      console.log('📅 DateRangePicker calling onDateRangeChange:', {
+        preset,
+        newDateRange,
+        daysDifference: newDateRange.startDate && newDateRange.endDate 
+          ? Math.ceil((new Date(newDateRange.endDate).getTime() - new Date(newDateRange.startDate).getTime()) / (1000 * 60 * 60 * 24))
+          : 0
+      });
       onDateRangeChange(newDateRange);
     }
   };
@@ -41,8 +54,14 @@ export function DateRangePicker({ dateRange, onDateRangeChange, className }: Dat
   };
 
   const formatDateRange = () => {
+    if (!dateRange.startDate || !dateRange.endDate) {
+      return 'Select date range';
+    }
     const start = new Date(dateRange.startDate);
     const end = new Date(dateRange.endDate);
+    if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+      return 'Select date range';
+    }
     return `${format(start, 'MMM dd')} - ${format(end, 'MMM dd, yyyy')}`;
   };
 
@@ -52,12 +71,16 @@ export function DateRangePicker({ dateRange, onDateRangeChange, className }: Dat
         <SelectTrigger className="w-[180px]">
           <SelectValue placeholder="Select date range" />
         </SelectTrigger>
-        <SelectContent>
-          <SelectItem value={DATE_PRESETS.LAST_7_DAYS}>Last 7 days</SelectItem>
-          <SelectItem value={DATE_PRESETS.LAST_30_DAYS}>Last 30 days</SelectItem>
-          <SelectItem value={DATE_PRESETS.LAST_90_DAYS}>Last 90 days</SelectItem>
-          <SelectItem value={DATE_PRESETS.CUSTOM}>Custom range</SelectItem>
-        </SelectContent>
+                <SelectContent>
+                  <SelectItem value={DATE_PRESETS.LAST_24_HOURS}>Last 24 hours</SelectItem>
+                  <SelectItem value={DATE_PRESETS.LAST_7_DAYS}>Last 7 days</SelectItem>
+                  <SelectItem value={DATE_PRESETS.LAST_28_DAYS}>Last 28 days</SelectItem>
+                  <SelectItem value={DATE_PRESETS.LAST_3_MONTHS}>Last 3 months</SelectItem>
+                  <SelectItem value={DATE_PRESETS.LAST_6_MONTHS}>Last 6 months</SelectItem>
+                  <SelectItem value={DATE_PRESETS.LAST_12_MONTHS}>Last 12 months</SelectItem>
+                  <SelectItem value={DATE_PRESETS.LAST_16_MONTHS}>Last 16 months</SelectItem>
+                  <SelectItem value={DATE_PRESETS.CUSTOM}>Custom</SelectItem>
+                </SelectContent>
       </Select>
 
       <Popover open={isOpen} onOpenChange={setIsOpen}>
@@ -79,7 +102,7 @@ export function DateRangePicker({ dateRange, onDateRangeChange, className }: Dat
               <div className="text-sm font-medium mb-2">Start Date</div>
               <Calendar
                 mode="single"
-                selected={new Date(dateRange.startDate)}
+                selected={dateRange.startDate ? new Date(dateRange.startDate) : undefined}
                 onSelect={(date) => handleCustomDateChange('startDate', date)}
                 disabled={(date) => date > new Date() || date < new Date('2020-01-01')}
                 initialFocus
@@ -89,11 +112,11 @@ export function DateRangePicker({ dateRange, onDateRangeChange, className }: Dat
               <div className="text-sm font-medium mb-2">End Date</div>
               <Calendar
                 mode="single"
-                selected={new Date(dateRange.endDate)}
+                selected={dateRange.endDate ? new Date(dateRange.endDate) : undefined}
                 onSelect={(date) => handleCustomDateChange('endDate', date)}
                 disabled={(date) => 
                   date > new Date() || 
-                  date < new Date(dateRange.startDate) || 
+                  (dateRange.startDate && date < new Date(dateRange.startDate)) || 
                   date < new Date('2020-01-01')
                 }
                 initialFocus

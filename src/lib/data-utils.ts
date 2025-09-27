@@ -1,4 +1,4 @@
-import { format, subDays, parseISO } from 'date-fns';
+import { format, subDays, subYears, parseISO } from 'date-fns';
 import { 
   GSCMetric, 
   AhrefsMetric, 
@@ -18,6 +18,23 @@ export function normalizeGSCData(gscData: GSCMetric[]): NormalizedMetric[] {
     inputCount: gscData.length,
     sampleInput: gscData.slice(0, 3),
   });
+
+  // Check for URL/page data specifically
+  const urlStats = {
+    totalRows: gscData.length,
+    rowsWithPage: gscData.filter(item => item.page).length,
+    rowsWithoutPage: gscData.filter(item => !item.page).length,
+    samplePagesFound: gscData.filter(item => item.page).slice(0, 5).map(item => ({
+      query: item.query,
+      page: item.page
+    })),
+    samplePagesNotFound: gscData.filter(item => !item.page).slice(0, 3).map(item => ({
+      query: item.query,
+      page: item.page
+    }))
+  };
+  
+  console.log('🔗 URL/Page Analysis:', urlStats);
 
   const normalized = gscData.map(item => ({
     date: item.date,
@@ -371,28 +388,51 @@ export function prepareTableData(data: NormalizedMetric[], enableComparison = fa
  * Generate date range presets
  */
 export function getDateRangePreset(preset: string): DateRange {
-  const today = new Date();
-  const endDate = format(today, 'yyyy-MM-dd');
+  // GSC excludes yesterday (incomplete data), so use yesterday as the latest complete day
+  const yesterday = subDays(new Date(), 1);
+  const endDate = format(yesterday, 'yyyy-MM-dd');
   
   switch (preset) {
+    case 'last_24_hours':
+      return {
+        startDate: format(subDays(yesterday, 1), 'yyyy-MM-dd'),
+        endDate,
+      };
     case 'last_7_days':
       return {
-        startDate: format(subDays(today, 7), 'yyyy-MM-dd'),
+        startDate: format(subDays(yesterday, 6), 'yyyy-MM-dd'), // 7 days ending yesterday
         endDate,
       };
-    case 'last_30_days':
+    case 'last_28_days':
       return {
-        startDate: format(subDays(today, 30), 'yyyy-MM-dd'),
+        startDate: format(subDays(yesterday, 27), 'yyyy-MM-dd'), // 28 days ending yesterday
         endDate,
       };
-    case 'last_90_days':
+    case 'last_3_months':
       return {
-        startDate: format(subDays(today, 90), 'yyyy-MM-dd'),
+        startDate: format(subDays(yesterday, 89), 'yyyy-MM-dd'), // ~90 days ending yesterday
+        endDate,
+      };
+    case 'last_6_months':
+      return {
+        startDate: format(subDays(yesterday, 179), 'yyyy-MM-dd'), // ~180 days ending yesterday
+        endDate,
+      };
+    case 'last_12_months':
+      return {
+        startDate: format(subDays(yesterday, 364), 'yyyy-MM-dd'), // ~365 days ending yesterday
+        endDate,
+      };
+    case 'last_16_months':
+      // GSC maximum: 16 months of historical data
+      const sixteenMonthsAgo = new Date(yesterday.getFullYear(), yesterday.getMonth() - 16, yesterday.getDate());
+      return {
+        startDate: format(sixteenMonthsAgo, 'yyyy-MM-dd'),
         endDate,
       };
     default:
       return {
-        startDate: format(subDays(today, 30), 'yyyy-MM-dd'),
+        startDate: format(subDays(yesterday, 27), 'yyyy-MM-dd'), // Default to 28 days ending yesterday
         endDate,
       };
   }
@@ -436,49 +476,224 @@ export function getComparisonDateRange(
 /**
  * Get date ranges for comparison presets
  */
+// GSC-style comparison range generator
+export function getGSCComparisonRanges(comparisonType: string): {
+  primary: { startDate: string; endDate: string };
+  comparison: { startDate: string; endDate: string };
+} {
+  // GSC excludes yesterday (incomplete data), so use yesterday as the latest complete day
+  const yesterday = subDays(new Date(), 1);
+  const endDate = format(yesterday, 'yyyy-MM-dd');
+  
+  switch (comparisonType) {
+    // Previous period comparisons
+    case 'last_24h_vs_previous':
+      return {
+        primary: {
+          startDate: format(subDays(yesterday, 0), 'yyyy-MM-dd'), // Yesterday only
+          endDate,
+        },
+        comparison: {
+          startDate: format(subDays(yesterday, 1), 'yyyy-MM-dd'), // Day before yesterday
+          endDate: format(subDays(yesterday, 0), 'yyyy-MM-dd'),
+        }
+      };
+      
+    case 'last_7d_vs_previous':
+      return {
+        primary: {
+          startDate: format(subDays(yesterday, 6), 'yyyy-MM-dd'), // 7 days ending yesterday
+          endDate,
+        },
+        comparison: {
+          startDate: format(subDays(yesterday, 13), 'yyyy-MM-dd'), // Previous 7 days
+          endDate: format(subDays(yesterday, 7), 'yyyy-MM-dd'),
+        }
+      };
+      
+    case 'last_28d_vs_previous':
+      return {
+        primary: {
+          startDate: format(subDays(yesterday, 27), 'yyyy-MM-dd'), // 28 days ending yesterday
+          endDate,
+        },
+        comparison: {
+          startDate: format(subDays(yesterday, 55), 'yyyy-MM-dd'), // Previous 28 days
+          endDate: format(subDays(yesterday, 28), 'yyyy-MM-dd'),
+        }
+      };
+      
+    case 'last_3m_vs_previous':
+      return {
+        primary: {
+          startDate: format(subDays(yesterday, 90), 'yyyy-MM-dd'),
+          endDate,
+        },
+        comparison: {
+          startDate: format(subDays(yesterday, 180), 'yyyy-MM-dd'),
+          endDate: format(subDays(yesterday, 90), 'yyyy-MM-dd'),
+        }
+      };
+      
+    case 'last_6m_vs_previous':
+      return {
+        primary: {
+          startDate: format(subDays(yesterday, 180), 'yyyy-MM-dd'),
+          endDate,
+        },
+        comparison: {
+          startDate: format(subDays(yesterday, 360), 'yyyy-MM-dd'),
+          endDate: format(subDays(yesterday, 180), 'yyyy-MM-dd'),
+        }
+      };
+      
+    // Week over week comparisons
+    case 'last_24h_week_over_week':
+      return {
+        primary: {
+          startDate: format(subDays(yesterday, 1), 'yyyy-MM-dd'),
+          endDate,
+        },
+        comparison: {
+          startDate: format(subDays(yesterday, 8), 'yyyy-MM-dd'),
+          endDate: format(subDays(yesterday, 7), 'yyyy-MM-dd'),
+        }
+      };
+      
+    case 'last_7d_week_over_week':
+      return {
+        primary: {
+          startDate: format(subDays(yesterday, 7), 'yyyy-MM-dd'),
+          endDate,
+        },
+        comparison: {
+          startDate: format(subDays(yesterday, 14), 'yyyy-MM-dd'),
+          endDate: format(subDays(yesterday, 7), 'yyyy-MM-dd'),
+        }
+      };
+      
+    // Year over year comparisons  
+    case 'last_7d_year_over_year':
+      const lastYearEnd7d = subDays(subYears(yesterday, 1), 0);
+      const lastYearStart7d = subDays(lastYearEnd7d, 7);
+      return {
+        primary: {
+          startDate: format(subDays(yesterday, 7), 'yyyy-MM-dd'),
+          endDate,
+        },
+        comparison: {
+          startDate: format(lastYearStart7d, 'yyyy-MM-dd'),
+          endDate: format(lastYearEnd7d, 'yyyy-MM-dd'),
+        }
+      };
+      
+    case 'last_28d_year_over_year':
+      const lastYearEnd28d = subDays(subYears(yesterday, 1), 0);
+      const lastYearStart28d = subDays(lastYearEnd28d, 28);
+      return {
+        primary: {
+          startDate: format(subDays(yesterday, 28), 'yyyy-MM-dd'),
+          endDate,
+        },
+        comparison: {
+          startDate: format(lastYearStart28d, 'yyyy-MM-dd'),
+          endDate: format(lastYearEnd28d, 'yyyy-MM-dd'),
+        }
+      };
+      
+    case 'last_3m_year_over_year':
+      const lastYearEnd3m = subDays(subYears(yesterday, 1), 0);
+      const lastYearStart3m = subDays(lastYearEnd3m, 90);
+      return {
+        primary: {
+          startDate: format(subDays(yesterday, 90), 'yyyy-MM-dd'),
+          endDate,
+        },
+        comparison: {
+          startDate: format(lastYearStart3m, 'yyyy-MM-dd'),
+          endDate: format(lastYearEnd3m, 'yyyy-MM-dd'),
+        }
+      };
+      
+    case 'custom':
+      // For custom, return empty ranges - user will set them manually
+      return {
+        primary: {
+          startDate: '',
+          endDate: '',
+        },
+        comparison: {
+          startDate: '',
+          endDate: '',
+        }
+      };
+      
+    default:
+      // Fallback to 28 days vs previous
+      return {
+        primary: {
+          startDate: format(subDays(yesterday, 28), 'yyyy-MM-dd'),
+          endDate,
+        },
+        comparison: {
+          startDate: format(subDays(yesterday, 56), 'yyyy-MM-dd'),
+          endDate: format(subDays(yesterday, 28), 'yyyy-MM-dd'),
+        }
+      };
+  }
+}
+
 export function getComparisonPresetRanges(preset: string): {
   primary: { startDate: string; endDate: string };
   comparison: { startDate: string; endDate: string };
 } {
-  const today = new Date();
-  const endDate = format(today, 'yyyy-MM-dd');
+  // Handle custom preset for available data
+  if (preset === 'custom_sep25_vs_sep22') {
+    return {
+      primary: { startDate: '2024-09-25', endDate: '2024-09-25' },
+      comparison: { startDate: '2024-09-22', endDate: '2024-09-22' }
+    };
+  }
+  
+  const yesterday = new Date();
+  const endDate = format(yesterday, 'yyyy-MM-dd');
   
   // Map preset to number of days
   const daysMap: Record<string, number> = {
+    'last_1d_vs_previous': 1,
     'last_7d_vs_previous': 7,
-    'last_14d_vs_previous': 14,
-    'last_30d_vs_previous': 30,
-    'last_60d_vs_previous': 60,
-    'last_90d_vs_previous': 90,
-    'last_120d_vs_previous': 120
+    'last_28d_vs_previous': 28,
+    'last_90d_vs_previous': 90,  // 3 months
+    'last_180d_vs_previous': 180, // 6 months
+    'last_365d_vs_previous': 365  // 12 months
   };
   
   const days = daysMap[preset];
   
   if (!days) {
-    // Fallback to 30 days if preset not found
+    // Fallback to 28 days if preset not found (GSC default)
     return {
       primary: {
-        startDate: format(subDays(today, 30), 'yyyy-MM-dd'),
+        startDate: format(subDays(yesterday, 28), 'yyyy-MM-dd'),
         endDate,
       },
       comparison: {
-        startDate: format(subDays(today, 60), 'yyyy-MM-dd'),
-        endDate: format(subDays(today, 30), 'yyyy-MM-dd'),
+        startDate: format(subDays(yesterday, 56), 'yyyy-MM-dd'),
+        endDate: format(subDays(yesterday, 28), 'yyyy-MM-dd'),
       }
     };
   }
   
-  // Primary period: Last N days up to today
+  // Primary period: Last N days up to yesterday
   const primary = {
-    startDate: format(subDays(today, days), 'yyyy-MM-dd'),
+    startDate: format(subDays(yesterday, days), 'yyyy-MM-dd'),
     endDate,
   };
   
   // Comparison period: Previous N days before the primary period
   const comparison = {
-    startDate: format(subDays(today, days * 2), 'yyyy-MM-dd'),
-    endDate: format(subDays(today, days), 'yyyy-MM-dd'),
+    startDate: format(subDays(yesterday, days * 2), 'yyyy-MM-dd'),
+    endDate: format(subDays(yesterday, days), 'yyyy-MM-dd'),
   };
   
   return { primary, comparison };

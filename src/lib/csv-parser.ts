@@ -79,17 +79,49 @@ function parseNumericValue(value: string | number): number | undefined {
  * Parse date value, handling various formats
  */
 function parseDateValue(value: string): string {
-  if (!value) return new Date().toISOString().split('T')[0];
+  if (!value || value.trim() === '') return '';
   
   try {
-    const date = new Date(value);
-    if (isNaN(date.getTime())) {
-      // If parsing fails, use current date
-      return new Date().toISOString().split('T')[0];
+    // Remove time portion if present (e.g., "24/9/2025 9:29" -> "24/9/2025")
+    const dateOnly = value.split(' ')[0];
+    
+    // Try to parse different date formats
+    let date: Date;
+    
+    // Check if it's DD/MM/YYYY or DD/M/YYYY format
+    if (dateOnly.includes('/')) {
+      const parts = dateOnly.split('/');
+      if (parts.length === 3) {
+        const day = parseInt(parts[0]);
+        const month = parseInt(parts[1]) - 1; // Month is 0-indexed
+        const year = parseInt(parts[2]);
+        
+        // Handle 2-digit years by assuming 20xx
+        const fullYear = year < 100 ? 2000 + year : year;
+        
+        date = new Date(fullYear, month, day);
+        
+        // Debug logging for DD/MM/YYYY parsing
+        if (value.includes('2025')) {
+          console.log(`📅 DD/MM/YYYY parsed: "${value}" → Day:${day}, Month:${month+1}, Year:${fullYear} → ${date.toDateString()}`);
+        }
+      } else {
+        date = new Date(value);
+      }
+    } else {
+      // Try standard date parsing
+      date = new Date(value);
     }
+    
+    if (isNaN(date.getTime())) {
+      console.warn(`Failed to parse date: ${value}`);
+      return '';
+    }
+    
     return date.toISOString().split('T')[0];
-  } catch {
-    return new Date().toISOString().split('T')[0];
+  } catch (error) {
+    console.warn(`Failed to parse date: ${value}`, error);
+    return '';
   }
 }
 

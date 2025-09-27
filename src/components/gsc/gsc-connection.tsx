@@ -6,18 +6,10 @@ import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Search, CheckCircle, AlertCircle, Loader2, ExternalLink, Calendar } from 'lucide-react';
-import { DateRangePicker } from '@/components/filters/date-range-picker';
-import { getDateRangePreset } from '@/lib/data-utils';
-import { useGSC } from '@/hooks/useGSC';
-import { NormalizedMetric } from '@/lib/types';
+import { Search, CheckCircle, AlertCircle, ExternalLink, Loader2 } from 'lucide-react';
+import { useGSC } from '@/contexts/GSCContext';
 
-interface GSCConnectionProps {
-  onDataFetch?: (data: NormalizedMetric[]) => void;
-  dateRange?: { startDate: string; endDate: string };
-}
-
-export function GSCConnection({ onDataFetch, dateRange: initialDateRange }: GSCConnectionProps) {
+export function GSCConnection() {
   const {
     isAuthenticated,
     isLoading,
@@ -31,14 +23,32 @@ export function GSCConnection({ onDataFetch, dateRange: initialDateRange }: GSCC
     disconnect,
   } = useGSC();
 
-  const [fetchingData, setFetchingData] = useState(false);
-  const [dateRange, setDateRange] = useState(() => 
-    initialDateRange || getDateRangePreset('last_30_days')
-  );
+  // Date range is no longer needed since we fetch on-demand based on Quick View filters
+  // Removed import-related state since we now use on-demand fetching
 
-  // Check auth status on mount
+  // Check auth status on mount and sync tokens
   useEffect(() => {
-    checkAuthStatus();
+    const initializeAuth = async () => {
+      // First, try to sync tokens if we have them in localStorage
+      const tokens = localStorage.getItem('gsc_tokens');
+      if (tokens) {
+        try {
+          await fetch('/api/gsc/auth/sync', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ tokens: JSON.parse(tokens) })
+          });
+          console.log('Tokens synced to server on mount');
+        } catch (error) {
+          console.error('Failed to sync tokens on mount:', error);
+        }
+      }
+      
+      // Then check auth status
+      await checkAuthStatus();
+    };
+    
+    initializeAuth();
   }, [checkAuthStatus]);
 
   const handleConnect = async () => {
@@ -46,48 +56,6 @@ export function GSCConnection({ onDataFetch, dateRange: initialDateRange }: GSCC
       await authenticate();
     } catch (error) {
       console.error('GSC connection failed:', error);
-    }
-  };
-
-  const handleFetchData = async () => {
-    if (!selectedSite) return;
-    
-    try {
-      setFetchingData(true);
-      
-      // Fetch comprehensive data with date, query, and page dimensions
-      // This gives us daily data for each query, which is needed for accurate position calculation
-      const comprehensiveData = await fetchData(dateRange.startDate, dateRange.endDate, ['date', 'query', 'page'], false);
-
-      // We can derive time series from this data, but for simplicity, we'll also fetch it separately for now
-      // to ensure chart totals are accurate. GSC API handles this efficiently.
-      const timeSeriesData = await fetchData(dateRange.startDate, dateRange.endDate, ['date'], true);
-      
-      // Combine both datasets, ensuring no duplicates if any overlap exists
-      // A simple way is to use a Map to ensure unique entries if needed, but for now we combine and let processing handle it
-      const combinedData = [...comprehensiveData, ...timeSeriesData];
-      
-      // Create a Set of unique keys to avoid duplicate entries if any exist between the two fetches
-      const uniqueData = Array.from(new Map(combinedData.map(item => [`${item.date}-${item.query}-${item.url}`, item])).values());
-      
-      // Debug logging
-      console.log('GSC Frontend Data:', {
-        comprehensiveCount: comprehensiveData.length,
-        timeSeriesCount: timeSeriesData.length,
-        totalCombined: combinedData.length,
-        totalUnique: uniqueData.length,
-        comprehensiveSample: comprehensiveData.slice(0, 3),
-        timeSeriesSample: timeSeriesData.slice(0, 5),
-        dateRange,
-      });
-      
-      if (onDataFetch) {
-        onDataFetch(uniqueData);
-      }
-    } catch (error) {
-      console.error('Failed to fetch GSC data:', error);
-    } finally {
-      setFetchingData(false);
     }
   };
 
@@ -99,14 +67,10 @@ export function GSCConnection({ onDataFetch, dateRange: initialDateRange }: GSCC
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center space-x-2">
-          <Search className="h-5 w-5 text-blue-600" />
+          <Search className="h-5 w-5" />
           <span>Google Search Console</span>
-          {isAuthenticated && (
-            <Badge variant="secondary" className="bg-green-100 text-green-800">
-              <CheckCircle className="h-3 w-3 mr-1" />
-              Connected
-            </Badge>
-          )}
+          {isAuthenticated && !selectedSite && <Badge variant="secondary">Connected</Badge>}
+          {selectedSite && <Badge variant="default">{formatSiteUrl(selectedSite)}</Badge>}
         </CardTitle>
         <CardDescription>
           Connect your GSC account to import real-time search performance data
@@ -183,51 +147,75 @@ export function GSCConnection({ onDataFetch, dateRange: initialDateRange }: GSCC
               )}
             </div>
 
-            {/* Date Range Selection */}
-            <div className="space-y-2">
-              <label className="text-sm font-medium flex items-center space-x-2">
-                <Calendar className="h-4 w-4" />
-                <span>Import Date Range:</span>
-              </label>
-              <DateRangePicker
-                dateRange={dateRange}
-                onDateRangeChange={setDateRange}
-              />
-            </div>
+            {/* Date ranges are now managed in the Quick View section */}
 
-            {/* Data Import */}
-            <div className="flex space-x-2">
-              <Button
-                onClick={handleFetchData}
-                disabled={!selectedSite || fetchingData || isLoading}
-                className="flex-1"
-              >
-                {fetchingData ? (
-                  <>
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    Importing Data...
-                  </>
-                ) : (
-                  'Import GSC Data'
-                )}
-              </Button>
+            {/* Connection Status */}
+            <div className="flex space-x-2 items-center">
+              {selectedSite ? (
+                <div className="flex-1 p-3 bg-green-50 dark:bg-green-950/20 rounded-lg border border-green-200 dark:border-green-800">
+                  <div className="flex items-center space-x-2">
+                    <CheckCircle className="h-4 w-4 text-green-600" />
+                    <div className="flex-1">
+                      <span className="text-sm font-medium text-green-900 dark:text-green-100">
+                        Connected to: {formatSiteUrl(selectedSite)}
+                      </span>
+                      <p className="text-xs text-green-700 dark:text-green-300 mt-1">
+                        Quick View will automatically fetch fresh data for this site
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex-1 p-3 bg-orange-50 dark:bg-orange-950/20 rounded-lg border border-orange-200 dark:border-orange-800">
+                  <div className="flex items-center space-x-2">
+                    <AlertCircle className="h-4 w-4 text-orange-600" />
+                    <span className="text-sm font-medium text-orange-900 dark:text-orange-100">
+                      Select a site above to start
+                    </span>
+                  </div>
+                </div>
+              )}
               
               <Button
                 variant="outline"
                 onClick={disconnect}
-                disabled={isLoading || fetchingData}
+                disabled={isLoading}
               >
                 Disconnect
               </Button>
             </div>
+            
+            {/* Progress indicator removed - no longer needed with on-demand fetching */}
 
-            {selectedSite && (
-              <div className="text-xs text-gray-500 bg-gray-50 dark:bg-gray-800 p-2 rounded">
-                <strong>Selected:</strong> {formatSiteUrl(selectedSite)}
-                <br />
-                <strong>Date Range:</strong> {dateRange.startDate} to {dateRange.endDate}
+            {/* Completion indicator removed - no longer needed with on-demand fetching */}
+            {false && (
+              <div className="mt-4 p-4 bg-green-50 border border-green-200 rounded-lg">
+                <div className="flex items-center mb-2">
+                  <div className="flex-shrink-0">
+                    <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center">
+                      <span className="text-green-600 text-lg">✅</span>
+                    </div>
+                  </div>
+                  <div className="ml-3">
+                    <h3 className="text-sm font-medium text-green-800">
+                      Import Completed Successfully!
+                    </h3>
+                  </div>
+                </div>
+                <div className="mt-2 text-sm text-green-700">
+                  <div className="grid grid-cols-1 gap-1">
+                    <div><strong>Total Records:</strong> {importStats.totalRecords.toLocaleString()}</div>
+                    <div><strong>Unique Records:</strong> {importStats.uniqueRecords.toLocaleString()}</div>
+                    <div><strong>Date Range:</strong> {importStats.dateRange}</div>
+                  </div>
+                </div>
+                <div className="mt-3 text-xs text-green-600">
+                  This message will auto-hide in 10 seconds, or click the button above to dismiss.
+                </div>
               </div>
             )}
+
+            {/* Debug info removed - date ranges now managed in Quick View section */}
           </div>
         )}
       </CardContent>

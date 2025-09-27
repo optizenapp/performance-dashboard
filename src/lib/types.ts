@@ -84,6 +84,12 @@ export const NormalizedMetricSchema = z.object({
   cpc: z.number().optional(),
   traffic: z.number().optional(),
   serpFeatures: z.string().optional(),
+  // Ahrefs comparison fields
+  previousTraffic: z.number().optional(),
+  trafficChange: z.number().optional(),
+  previousPosition: z.number().optional(),
+  positionChange: z.number().optional(),
+  previousDate: z.string().optional(),
 });
 
 // Filter Types
@@ -114,12 +120,38 @@ export const FilterOptionsSchema = z.object({
 
 export type FilterOptions = z.infer<typeof FilterOptionsSchema>;
 
+// Ahrefs-specific filter types
+export const AhrefsComparisonFilterSchema = z.enum([
+  'all_data',
+  'all_changes',
+  'last_24_hours',
+  'last_7_days',
+  'last_14_days',
+  'last_30_days',
+  'last_60_days',
+  'last_90_days',
+  'last_6_months'
+]);
+
+export const AhrefsLastUpdatedFilterSchema = z.enum([
+  'all',
+  'last_5_days',
+  'last_6_10_days',
+  'last_11_20_days',
+  'last_21_plus_days'
+]);
+
+export type AhrefsComparisonFilter = z.infer<typeof AhrefsComparisonFilterSchema>;
+export type AhrefsLastUpdatedFilter = z.infer<typeof AhrefsLastUpdatedFilterSchema>;
+
 // Section-specific filter types
 export const SectionFiltersSchema = z.object({
   dateRange: DateRangeSchema,
   enableComparison: z.boolean().optional(),
   comparisonDateRange: DateRangeSchema.optional(),
   comparisonPreset: ComparisonPresetSchema.optional(),
+  ahrefsComparisonFilter: AhrefsComparisonFilterSchema.optional(),
+  ahrefsLastUpdatedFilter: AhrefsLastUpdatedFilterSchema.optional(),
 });
 
 export type SectionFilters = z.infer<typeof SectionFiltersSchema>;
@@ -244,8 +276,12 @@ export const SOURCES = {
 } as const;
 
 export const DATE_PRESETS = {
+  LAST_24_HOURS: 'last_24_hours',
   LAST_7_DAYS: 'last_7_days',
-  LAST_30_DAYS: 'last_30_days',
-  LAST_90_DAYS: 'last_90_days',
+  LAST_28_DAYS: 'last_28_days',
+  LAST_3_MONTHS: 'last_3_months',
+  LAST_6_MONTHS: 'last_6_months',
+  LAST_12_MONTHS: 'last_12_months',
+  LAST_16_MONTHS: 'last_16_months',
   CUSTOM: 'custom',
 } as const;

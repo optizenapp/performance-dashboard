@@ -42,8 +42,8 @@ export function ComparisonSettings({ filters, onFiltersChange }: ComparisonSetti
             onCheckedChange={(checked) => {
               const updates: Partial<FilterOptions> = { enableComparison: checked };
               if (checked) {
-                updates.comparisonPreset = 'last_30d_vs_previous';
-                const ranges = getComparisonPresetRanges('last_30d_vs_previous');
+                updates.comparisonPreset = 'last_28d_vs_previous';
+                const ranges = getComparisonPresetRanges('last_28d_vs_previous');
                 updates.dateRange = ranges.primary;
                 updates.comparisonDateRange = ranges.comparison;
               }
@@ -58,7 +58,7 @@ export function ComparisonSettings({ filters, onFiltersChange }: ComparisonSetti
             <div className="space-y-2">
               <Label className="text-sm font-medium">Comparison Period</Label>
               <Select
-                value={filters.comparisonPreset || 'last_30d_vs_previous'}
+                value={filters.comparisonPreset || 'last_28d_vs_previous'}
                 onValueChange={(preset: ComparisonPreset) => {
                   const ranges = getComparisonPresetRanges(preset);
                   updateFilters({
@@ -72,12 +72,16 @@ export function ComparisonSettings({ filters, onFiltersChange }: ComparisonSetti
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="last_7d_vs_previous">7 days vs Previous 7 days</SelectItem>
-                  <SelectItem value="last_14d_vs_previous">14 days vs Previous 14 days</SelectItem>
-                  <SelectItem value="last_30d_vs_previous">30 days vs Previous 30 days</SelectItem>
-                  <SelectItem value="last_60d_vs_previous">60 days vs Previous 60 days</SelectItem>
-                  <SelectItem value="last_90d_vs_previous">90 days vs Previous 90 days</SelectItem>
-                  <SelectItem value="last_120d_vs_previous">120 days vs Previous 120 days</SelectItem>
+                  <SelectItem value="last_24h_vs_previous">Compare last 24 hours to previous period</SelectItem>
+                  <SelectItem value="last_7d_vs_previous">Compare last 7 days to previous period</SelectItem>
+                  <SelectItem value="last_28d_vs_previous">Compare last 28 days to previous period</SelectItem>
+                  <SelectItem value="last_3m_vs_previous">Compare last 3 months to previous period</SelectItem>
+                  <SelectItem value="last_6m_vs_previous">Compare last 6 months to previous period</SelectItem>
+                  <SelectItem value="last_24h_week_over_week">Compare last 24 hours week over week</SelectItem>
+                  <SelectItem value="last_7d_week_over_week">Compare last 7 days week over week</SelectItem>
+                  <SelectItem value="last_7d_year_over_year">Compare last 7 days year over year</SelectItem>
+                  <SelectItem value="last_28d_year_over_year">Compare last 28 days year over year</SelectItem>
+                  <SelectItem value="last_3m_year_over_year">Compare last 3 months year over year</SelectItem>
                 </SelectContent>
               </Select>
             </div>

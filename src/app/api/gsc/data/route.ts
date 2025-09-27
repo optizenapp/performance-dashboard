@@ -14,6 +14,15 @@ export async function POST(request: NextRequest) {
 
     const gscClient = getGSCClient();
     
+    // Try to load stored credentials
+    const hasCredentials = gscClient.loadStoredCredentials();
+    
+    console.log('GSC Data API - Auth Check:', {
+      hasCredentials,
+      isAuthenticated: gscClient.isAuthenticated(),
+      globalTokens: !!global.gscTokens
+    });
+    
     // Check if authenticated
     if (!gscClient.isAuthenticated()) {
       return NextResponse.json(

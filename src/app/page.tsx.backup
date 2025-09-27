@@ -14,32 +14,21 @@ import { PerformanceChart } from '@/components/charts/performance-chart';
 import { TabbedDataTable } from '@/components/tables/tabbed-data-table';
 import { GSCConnection } from '@/components/gsc/gsc-connection';
 import { PerformanceClusters } from '@/components/clusters/performance-clusters';
-import { useGSCData } from '@/hooks/useGSCData';
-import { useGSC } from '@/contexts/GSCContext';
 import { saveDataToStorage, loadDataFromStorage, hasStoredData, clearStoredData } from '@/lib/data-storage';
+import { ClientOnly } from '@/components/client-only';
+import { useMongoData } from '@/hooks/useMongoData';
+import { useGSCData } from '@/hooks/useGSCData';
+import { useGSC } from '@/hooks/useGSC';
+
+const emptyDateRange = { startDate: '', endDate: '' };
 
 export default function Dashboard() {
   const [data, setData] = useState<NormalizedMetric[]>([]);
   const [loading, setLoading] = useState(false);
-  
-  // GSC state
-  const { selectedSite, isAuthenticated, checkAuthStatus, loadSites, sites } = useGSC();
-
-  // Initialize GSC authentication status on mount
-  useEffect(() => {
-    const initGSCAuth = async () => {
-      console.log('🔐 Initializing GSC auth status on main page...');
-      await checkAuthStatus();
-      // Load sites if authenticated
-      if (isAuthenticated) {
-        console.log('🔄 Loading sites since authenticated...');
-        await loadSites();
-      }
-    };
-    initGSCAuth();
-  }, [checkAuthStatus, loadSites, isAuthenticated]);
-  
   const [selectedChartMetrics, setSelectedChartMetrics] = useState<string[]>(['clicks']);
+
+  // Get GSC connection state
+  const { selectedSite, isAuthenticated } = useGSC();
 
   // Remove 'volume' and 'traffic' from chart metrics if they exist (Ahrefs point-in-time data not suitable for time series)
   useEffect(() => {
@@ -49,7 +38,7 @@ export default function Dashboard() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // Remove dependency to prevent infinite loop
   const [filters] = useState<FilterOptions>({
-    dateRange: getDateRangePreset('last_30_days'),
+    dateRange: getDateRangePreset('last_90_days'),
     metrics: ['clicks', 'impressions', 'ctr', 'position'],
     sources: [SOURCES.GSC, SOURCES.AHREFS],
     enableComparison: false,
@@ -57,183 +46,151 @@ export default function Dashboard() {
     comparisonDateRange: undefined,
   });
 
-  // New section-specific filters
-  const defaultSectionFilters: SectionFilters = {
-    dateRange: getDateRangePreset('last_30_days'),
-    enableComparison: false,
-  };
 
   const [sectionFilters, setSectionFilters] = useState({
-    chart: { ...defaultSectionFilters },
-    quickView: { ...defaultSectionFilters },
-    table: { ...defaultSectionFilters },
+    chart: { dateRange: getDateRangePreset('last_90_days'), enableComparison: false, comparisonPreset: undefined, comparisonDateRange: undefined },
+    quickView: { dateRange: getDateRangePreset('last_90_days'), enableComparison: false, comparisonPreset: undefined, comparisonDateRange: undefined },
+    table: { dateRange: getDateRangePreset('last_90_days'), enableComparison: false, comparisonPreset: undefined, comparisonDateRange: undefined },
   });
 
-  // Fetch Quick Overview data - FAST aggregated totals (no dimensions)
-  console.log('🚀 Quick View GSC Fetch (FAST MODE):', {
-    isAuthenticated,
-    selectedSite,
-    sitesCount: sites?.length || 0,
-    startDate: sectionFilters.quickView.dateRange.startDate,
-    endDate: sectionFilters.quickView.dateRange.endDate,
-    strategy: 'Aggregated totals only - no query breakdown',
-    expectedSpeed: '~500ms instead of 5+ minutes',
-    dateRangeDays: sectionFilters.quickView.dateRange.startDate && sectionFilters.quickView.dateRange.endDate 
-      ? Math.ceil((new Date(sectionFilters.quickView.dateRange.endDate).getTime() - new Date(sectionFilters.quickView.dateRange.startDate).getTime()) / (1000 * 60 * 60 * 24))
-      : 0
+  console.log('🔍 Current section filters state:', {
+    table: sectionFilters.table,
+    chart: sectionFilters.chart,
+    quickView: sectionFilters.quickView
   });
-  
-  const quickViewGSCData = useGSCData({
+
+  // Fetch Quick Overview data directly from GSC API on-demand
+  const quickViewData = useGSCData({
     siteUrl: selectedSite || undefined,
     startDate: sectionFilters.quickView.dateRange.startDate,
     endDate: sectionFilters.quickView.dateRange.endDate,
-    dimensions: [], // No dimensions for aggregated totals
-    timeSeries: false,
-    quickView: true, // FAST mode for quick overview
-    enabled: !!(isAuthenticated && selectedSite && sectionFilters.quickView.dateRange.startDate && sectionFilters.quickView.dateRange.endDate),
-    hookId: 'QUICK_VIEW'
+    dimensions: ['date', 'query'], // Get both time series and query data for comprehensive stats
+    timeSeries: false, // Use aggregated data for quick overview
+    enabled: !!(isAuthenticated && selectedSite && sectionFilters.quickView.dateRange.startDate && sectionFilters.quickView.dateRange.endDate)
   });
 
-  // Table GSC Data Fetch - for detailed table view
-  console.log('📊 Table GSC Fetch (DETAILED MODE):', {
-    isAuthenticated,
-    selectedSite,
-    startDate: sectionFilters.table.dateRange.startDate,
-    endDate: sectionFilters.table.dateRange.endDate,
-    strategy: 'Top 1000 query+page combinations (same as GSC console)',
-    expectedSpeed: '~2-3 seconds for top performers'
-  });
-  
-  const tableGSCData = useGSCData({
-    siteUrl: selectedSite || undefined,
-    startDate: sectionFilters.table.dateRange.startDate,
-    endDate: sectionFilters.table.dateRange.endDate,
-    dimensions: ['query', 'page'], // Include query AND page dimensions for table
-    timeSeries: false,
-    quickView: false, // Detailed mode for table
-    enabled: !!(isAuthenticated && selectedSite && sectionFilters.table.dateRange.startDate && sectionFilters.table.dateRange.endDate),
-    hookId: 'TABLE_PRIMARY'
-  });
-
-  // All-time GSC data for cluster cards (full 16 months - GSC API limit)
-  const allTimeGSCData = useGSCData({
-    siteUrl: selectedSite || undefined,
-    startDate: getDateRangePreset('last_16_months').startDate, // Use full 16 months as "all-time"
-    endDate: getDateRangePreset('last_16_months').endDate,
-    dimensions: ['query', 'page'],
-    timeSeries: false,
-    quickView: false,
-    enabled: !!(isAuthenticated && selectedSite),
-    hookId: 'ALL_TIME_CLUSTERS'
-  });
-
-  // Comparison GSC data for Quick View comparison
-  const comparisonGSCData = useGSCData({
-    siteUrl: selectedSite || undefined,
-    startDate: sectionFilters.quickView.comparisonDateRange?.startDate,
-    endDate: sectionFilters.quickView.comparisonDateRange?.endDate,
-    dimensions: [], // No dimensions for aggregated totals
-    timeSeries: false,
-    quickView: true, // FAST mode for quick overview
-    enabled: !!(
-      isAuthenticated && 
-      selectedSite && 
-      sectionFilters.quickView.enableComparison &&
-      sectionFilters.quickView.comparisonDateRange?.startDate && 
-      sectionFilters.quickView.comparisonDateRange?.endDate
-    ),
-    hookId: 'QUICK_VIEW_COMPARISON'
-  });
-
-  // Chart GSC Data Fetch - for time-series chart visualization
-  console.log('📈 Chart GSC Fetch (TIME-SERIES MODE):', {
-    isAuthenticated,
-    selectedSite,
-    startDate: sectionFilters.chart.dateRange.startDate,
-    endDate: sectionFilters.chart.dateRange.endDate,
-    strategy: 'Daily time-series data for chart visualization',
-    expectedSpeed: '~1-2 seconds for date range'
-  });
-  
-  const chartGSCData = useGSCData({
-    siteUrl: selectedSite || undefined,
-    startDate: sectionFilters.chart.dateRange.startDate,
-    endDate: sectionFilters.chart.dateRange.endDate,
-    dimensions: ['date'], // Date dimension for time-series
-    timeSeries: true, // Enable time-series mode
-    quickView: false,
-    enabled: !!(isAuthenticated && selectedSite && sectionFilters.chart.dateRange.startDate && sectionFilters.chart.dateRange.endDate),
-    hookId: 'CHART_PRIMARY'
-  });
-
-  // Chart Comparison GSC Data - for comparison mode in charts
-  const chartComparisonGSCData = useGSCData({
-    siteUrl: selectedSite || undefined,
-    startDate: sectionFilters.chart.comparisonDateRange?.startDate,
-    endDate: sectionFilters.chart.comparisonDateRange?.endDate,
-    dimensions: ['date'], // Date dimension for time-series
-    timeSeries: true, // Enable time-series mode
-    quickView: false,
-    enabled: !!(
-      isAuthenticated && 
-      selectedSite && 
-      sectionFilters.chart.enableComparison &&
-      sectionFilters.chart.comparisonDateRange?.startDate && 
-      sectionFilters.chart.comparisonDateRange?.endDate
-    ),
-    hookId: 'CHART_COMPARISON'
-  });
-
-  // Table Comparison GSC Data - for comparison mode in tables
-  console.log('📊 Table Comparison GSC Fetch:', {
-    isAuthenticated,
-    selectedSite,
-    enableComparison: sectionFilters.table.enableComparison,
-    startDate: sectionFilters.table.comparisonDateRange?.startDate,
-    endDate: sectionFilters.table.comparisonDateRange?.endDate,
-    strategy: 'Query+page combinations for table comparison'
-  });
-  
-  const tableComparisonGSCData = useGSCData({
-    siteUrl: selectedSite || undefined,
-    startDate: sectionFilters.table.comparisonDateRange?.startDate,
-    endDate: sectionFilters.table.comparisonDateRange?.endDate,
-    dimensions: ['query', 'page'], // Include query AND page dimensions for table
-    timeSeries: false,
-    quickView: false, // Detailed mode for table
-    enabled: !!(
-      isAuthenticated && 
-      selectedSite && 
-      sectionFilters.table.enableComparison &&
-      sectionFilters.table.comparisonDateRange?.startDate && 
-      sectionFilters.table.comparisonDateRange?.endDate
-    ),
-    hookId: 'TABLE_COMPARISON'
-  });
-
-  // Debug: Log when Quick View filters change
+  // Debug: Log when Quick Overview filters change
   useEffect(() => {
-    console.log('🔄 Quick View filters changed:', {
+    console.log('🔄 Quick Overview filters changed:', {
       startDate: sectionFilters.quickView.dateRange.startDate,
       endDate: sectionFilters.quickView.dateRange.endDate,
-      enableComparison: sectionFilters.quickView.enableComparison,
-      comparisonPreset: sectionFilters.quickView.comparisonPreset,
-      dateRangeDays: sectionFilters.quickView.dateRange.startDate && sectionFilters.quickView.dateRange.endDate 
-        ? Math.ceil((new Date(sectionFilters.quickView.dateRange.endDate).getTime() - new Date(sectionFilters.quickView.dateRange.startDate).getTime()) / (1000 * 60 * 60 * 24))
-        : 0,
-      gscDataCount: quickViewGSCData.data?.length || 0,
-      gscLoading: quickViewGSCData.loading,
-      gscError: quickViewGSCData.error
+      enabled: !!(sectionFilters.quickView.dateRange.startDate && sectionFilters.quickView.dateRange.endDate),
+      dataLoading: quickViewData.loading,
+      dataCount: quickViewData.data?.length || 0
     });
-  }, [
-    sectionFilters.quickView.dateRange.startDate, 
-    sectionFilters.quickView.dateRange.endDate,
-    sectionFilters.quickView.enableComparison,
-    sectionFilters.quickView.comparisonPreset,
-    quickViewGSCData.data?.length,
-    quickViewGSCData.loading,
-    quickViewGSCData.error
-  ]);
+  }, [sectionFilters.quickView.dateRange.startDate, sectionFilters.quickView.dateRange.endDate, quickViewData.loading, quickViewData.data?.length]);
+
+  // TEMPORARILY DISABLED: Fetch Table data on-demand based on its filters
+  // const tableData = useMongoData({
+  //   startDate: sectionFilters.table.dateRange.startDate,
+  //   endDate: sectionFilters.table.dateRange.endDate,
+  //   source: 'gsc',
+  //   limit: 100000, // Higher limit for table
+  //   enabled: !!(sectionFilters.table.dateRange.startDate && sectionFilters.table.dateRange.endDate)
+  // });
+
+  // TEMPORARILY DISABLED: Fetch Chart data on-demand based on its filters
+  // const chartData = useMongoData({
+  //   startDate: sectionFilters.chart.dateRange.startDate,
+  //   endDate: sectionFilters.chart.dateRange.endDate,
+  //   source: 'gsc',
+  //   limit: 50000,
+  //   enabled: !!(sectionFilters.chart.dateRange.startDate && sectionFilters.chart.dateRange.endDate)
+  // });
+
+  // Temporary empty data objects to prevent errors
+  const tableData = { data: [], loading: false, error: null, refetch: () => {} };
+  const chartData = { data: [], loading: false, error: null, refetch: () => {} };
+
+  // Set default date range and load existing data on client-side
+  useEffect(() => {
+    console.log('🚀 useEffect initializeDashboard starting...');
+    const initializeDashboard = async () => {
+      // Use a wider default range to capture more imported data
+      const defaultDateRange = getDateRangePreset('last_90_days');
+    console.log('🔧 Setting default section filters:', {
+      defaultDateRange,
+        preset: 'last_90_days'
+    });
+    setSectionFilters({
+      chart: { dateRange: defaultDateRange, enableComparison: false, comparisonPreset: undefined, comparisonDateRange: undefined },
+      quickView: { dateRange: defaultDateRange, enableComparison: false, comparisonPreset: undefined, comparisonDateRange: undefined },
+      table: { dateRange: defaultDateRange, enableComparison: false, comparisonPreset: undefined, comparisonDateRange: undefined },
+    });
+
+      // Try to load existing data from MongoDB
+      try {
+        console.log('🔄 Checking for existing data in MongoDB...');
+        console.log('🌐 Making API call to: /api/gsc/data-mongo?limit=500000&source=gsc&initialLoad=true');
+        const dataResponse = await fetch('/api/gsc/data-mongo?limit=500000&source=gsc&initialLoad=true');
+        
+        if (dataResponse.ok) {
+          const dataResult = await dataResponse.json();
+          
+          if (dataResult.data && dataResult.data.length > 0) {
+            console.log('✅ Found existing data in MongoDB:', {
+              recordCount: dataResult.data.length,
+              sources: [...new Set(dataResult.data.map((item: any) => item.source))],
+              sampleData: dataResult.data.slice(0, 5),
+              metricTypes: [...new Set(dataResult.data.map((item: any) => item.metric_type))],
+              uniqueDates: [...new Set(dataResult.data.map((item: any) => item.date))].sort(),
+              sampleWithValues: dataResult.data.slice(0, 3).map(item => ({
+                date: item.date,
+                query: item.query,
+                metric_type: item.metric_type,
+                value: item.value,
+                url: item.url
+              }))
+            });
+            
+            // Auto-adjust section filters to show all data FIRST
+            const dates = dataResult.data.map((item: any) => item.date).sort();
+            const earliestDate = dates[0];
+            const latestDate = dates[dates.length - 1];
+            
+            const dataDateRange = {
+              startDate: earliestDate,
+              endDate: latestDate
+            };
+            
+            console.log('📅 Setting section filters to data range:', dataDateRange);
+            
+            setSectionFilters({
+              chart: { dateRange: dataDateRange, enableComparison: false, comparisonPreset: undefined, comparisonDateRange: undefined },
+              quickView: { dateRange: dataDateRange, enableComparison: false, comparisonPreset: undefined, comparisonDateRange: undefined },
+              table: { dateRange: dataDateRange, enableComparison: false, comparisonPreset: undefined, comparisonDateRange: undefined },
+            });
+            
+            // Then load the data into the dashboard
+            setData(dataResult.data);
+            
+            console.log('📊 Data loaded into state:', {
+              dataLength: dataResult.data.length,
+              firstFewItems: dataResult.data.slice(0, 3),
+              dateRange: dataDateRange
+            });
+          } else {
+            console.log('ℹ️ No existing data found in MongoDB');
+          }
+        } else {
+          console.log('ℹ️ Could not check for existing data (API not available)');
+        }
+      } catch (error) {
+        console.log('ℹ️ Could not load existing data:', error);
+        // This is fine - user can import new data
+        // But ensure section filters have valid default dates so they don't filter everything out
+        const fallbackDateRange = getDateRangePreset('last_90_days');
+        setSectionFilters({
+          chart: { dateRange: fallbackDateRange, enableComparison: false, comparisonPreset: undefined, comparisonDateRange: undefined },
+          quickView: { dateRange: fallbackDateRange, enableComparison: false, comparisonPreset: undefined, comparisonDateRange: undefined },
+          table: { dateRange: fallbackDateRange, enableComparison: false, comparisonPreset: undefined, comparisonDateRange: undefined },
+        });
+        console.log('🔧 Set fallback section filters due to API error:', fallbackDateRange);
+      }
+    };
+
+    initializeDashboard();
+  }, []);
 
   // Load persisted data on mount
   useEffect(() => {
@@ -257,12 +214,12 @@ export default function Dashboard() {
     loadPersistedData();
   }, []);
 
-  // Calculate filtered data (for Ahrefs data only - GSC uses separate hooks)
+  // Calculate filtered data
   const filteredData = useMemo(() => {
-    console.log('🔍 Filtering Ahrefs data with current filters:', {
-      ahrefsItems: data.length,
+    console.log('🔍 Filtering data with current filters:', {
+      totalItems: data.length,
       dateRange: filters.dateRange,
-      ahrefsItemsWithDates: data.filter(item => item.source === SOURCES.AHREFS).map(item => ({
+      gscItemsWithDates: data.filter(item => item.source === SOURCES.GSC).map(item => ({
         date: item.date,
         query: item.query?.substring(0, 20) + '...'
       })).slice(0, 5)
@@ -392,75 +349,39 @@ export default function Dashboard() {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const filterOptions = useMemo(() => extractFilterOptions(data), [data]); // Use all data for filter options
 
-  // Section-specific filtered data - use appropriate GSC data sources
+  // Section-specific filtered data
   const sectionFilteredData = useMemo(() => {
-    return {
-      quickView: quickViewGSCData.data || [], // Use live GSC data for Quick View
-      table: tableGSCData.data || [], // Use live GSC data for Table
+    const filterDataBySection = (sectionFilters: SectionFilters) => {
+      const startDate = new Date(sectionFilters.dateRange.startDate);
+      const endDate = new Date(sectionFilters.dateRange.endDate);
+      
+      return data.filter(item => {
+        const itemDate = new Date(item.date);
+        const dateMatch = itemDate >= startDate && itemDate <= endDate;
+        
+        // Apply global source filter
+        const sourceMatch = filters.sources.includes(item.source);
+        
+        return dateMatch && sourceMatch;
+      });
     };
-  }, [quickViewGSCData.data, tableGSCData.data]);
-  // Prepare chart data for multiple metrics using GSC data
-  const chartData = useMemo(() => {
-    console.log('📈 Preparing chart data:', {
-      gscDataCount: chartGSCData.data?.length || 0,
-      selectedMetrics: selectedChartMetrics,
-      loading: chartGSCData.loading,
-      error: chartGSCData.error
-    });
 
-    if (!chartGSCData.data || chartGSCData.data.length === 0) {
-      return [];
-    }
-
-    const allChartData: ChartDataPoint[] = [];
-      selectedChartMetrics.forEach(metric => {
-      // Use GSC data for chart instead of Ahrefs data
-      const metricData = prepareChartData(chartGSCData.data || [], metric, 'date');
-      allChartData.push(...metricData);
-    });
-    
-    console.log('📈 Chart data prepared:', {
-      totalDataPoints: allChartData.length,
-      sampleData: allChartData.slice(0, 3)
-    });
-
-    return allChartData;
-  }, [chartGSCData.data, selectedChartMetrics, chartGSCData.loading, chartGSCData.error]);
-
-  // Prepare chart comparison data
-  const chartComparisonData = useMemo(() => {
-    if (!sectionFilters.chart.enableComparison || !chartComparisonGSCData.data || chartComparisonGSCData.data.length === 0) {
-      return [];
-    }
-
-    console.log('📈 Preparing chart comparison data:', {
-      comparisonDataCount: chartComparisonGSCData.data.length,
-      selectedMetrics: selectedChartMetrics
-    });
-    
-    const allComparisonData: ChartDataPoint[] = [];
-      selectedChartMetrics.forEach(metric => {
-      const metricData = prepareChartData(chartComparisonGSCData.data || [], metric, 'date');
-      allComparisonData.push(...metricData);
-    });
-    
-    return allComparisonData;
-  }, [chartComparisonGSCData.data, selectedChartMetrics, sectionFilters.chart.enableComparison, chartComparisonGSCData.loading]);
+    return {
+      chart: filterDataBySection(sectionFilters.chart),
+      quickView: filterDataBySection(sectionFilters.quickView),
+      table: filterDataBySection(sectionFilters.table),
+    };
+  }, [data, sectionFilters, filters.sources]);
+  // Chart data is now fetched on-demand via useMongoData hook above
 
   // Section-specific summary stats for Quick Overview
   const quickViewStats = useMemo(() => {
-    console.log('🔍 Calculating Quick Overview stats for date range:', {
-    startDate: sectionFilters.quickView.dateRange.startDate,
-    endDate: sectionFilters.quickView.dateRange.endDate,
-      dataPoints: sectionFilteredData.quickView.length,
-      sampleData: sectionFilteredData.quickView.slice(0, 3),
-      comparisonEnabled: sectionFilters.quickView.enableComparison,
-      comparisonPreset: sectionFilters.quickView.comparisonPreset,
-      totalDataPoints: data.length,
-      dateRangeInDays: Math.ceil((new Date(sectionFilters.quickView.dateRange.endDate).getTime() - new Date(sectionFilters.quickView.dateRange.startDate).getTime()) / (1000 * 60 * 60 * 24))
-    });
-
-    const stats = {
+    const quickViewFilteredData = quickViewData.data || [];
+    
+    // Early return if no data to avoid processing
+    if (quickViewFilteredData.length === 0) {
+      console.log('⚠️ No Quick Overview data - returning empty stats');
+      return {
         totalClicks: 0,
         totalImpressions: 0,
         avgCTR: 0,
@@ -468,37 +389,96 @@ export default function Dashboard() {
         totalVolume: 0,
         totalTraffic: 0,
       };
-
-    if (sectionFilteredData.quickView.length === 0) {
-      console.log('⚠️ No Quick Overview data for selected date range');
-      return stats;
     }
+
+    // Limit processing to prevent freezing - sample large datasets
+    const maxProcessingSize = 10000;
+    const dataToProcess = quickViewFilteredData.length > maxProcessingSize 
+      ? quickViewFilteredData.slice(0, maxProcessingSize)
+      : quickViewFilteredData;
     
-    // Calculate Average Position correctly according to GSC methodology
-    // GSC methodology: "topmost position... averaged across all impressions"
-    
-    console.log('🔍 Quick Overview position debugging:', {
-      totalDataPoints: sectionFilteredData.quickView.length,
-      gscDataPoints: sectionFilteredData.quickView.filter(item => item.source === SOURCES.GSC).length,
-      sampleGSCData: sectionFilteredData.quickView.filter(item => item.source === SOURCES.GSC).slice(0, 3).map(item => ({
-        date: item.date,
-        source: item.source,
-        position: item.position,
-        query: item.query?.substring(0, 20)
-      })),
-      dateRangeCheck: {
-        filterStart: sectionFilters.quickView.dateRange.startDate,
-        filterEnd: sectionFilters.quickView.dateRange.endDate,
-        actualDateRange: {
-          earliest: sectionFilteredData.quickView.length > 0 ? Math.min(...sectionFilteredData.quickView.map(item => new Date(item.date).getTime())) : null,
-          latest: sectionFilteredData.quickView.length > 0 ? Math.max(...sectionFilteredData.quickView.map(item => new Date(item.date).getTime())) : null
-        }
+    console.log('🔍 Calculating Quick Overview stats (optimized):', {
+      startDate: sectionFilters.quickView.dateRange.startDate,
+      endDate: sectionFilters.quickView.dateRange.endDate,
+      totalDataPoints: quickViewFilteredData.length,
+      processingDataPoints: dataToProcess.length,
+      sampled: quickViewFilteredData.length > maxProcessingSize,
+      loading: quickViewData.loading,
+      dateRangeInDays: (sectionFilters.quickView.dateRange.startDate && sectionFilters.quickView.dateRange.endDate) 
+        ? Math.ceil((new Date(sectionFilters.quickView.dateRange.endDate).getTime() - new Date(sectionFilters.quickView.dateRange.startDate).getTime()) / (1000 * 60 * 60 * 24))
+        : 0,
+      dateRangeParsed: {
+        startDateObj: sectionFilters.quickView.dateRange.startDate ? new Date(sectionFilters.quickView.dateRange.startDate) : null,
+        endDateObj: sectionFilters.quickView.dateRange.endDate ? new Date(sectionFilters.quickView.dateRange.endDate) : null,
+        startDateISO: sectionFilters.quickView.dateRange.startDate ? new Date(sectionFilters.quickView.dateRange.startDate).toISOString() : null,
+        endDateISO: sectionFilters.quickView.dateRange.endDate ? new Date(sectionFilters.quickView.dateRange.endDate).toISOString() : null,
+        startDateLocal: sectionFilters.quickView.dateRange.startDate ? new Date(sectionFilters.quickView.dateRange.startDate).toLocaleDateString() : null,
+        endDateLocal: sectionFilters.quickView.dateRange.endDate ? new Date(sectionFilters.quickView.dateRange.endDate).toLocaleDateString() : null
       }
     });
-    
-    if (sectionFilteredData.quickView.length > 0) {
-      const actualEarliest = new Date(Math.min(...sectionFilteredData.quickView.map(item => new Date(item.date).getTime()))).toISOString().split('T')[0];
-      const actualLatest = new Date(Math.max(...sectionFilteredData.quickView.map(item => new Date(item.date).getTime()))).toISOString().split('T')[0];
+
+    // Simplified, fast calculation using reduce instead of multiple forEach loops
+    const stats = dataToProcess.reduce((acc, item) => {
+      if (item.source === SOURCES.GSC) {
+        acc.totalClicks += item.clicks || 0;
+        acc.totalImpressions += item.impressions || 0;
+        // Simple position average (not weighted - for performance)
+        if (item.position && item.position > 0) {
+          acc.positionSum += item.position;
+          acc.positionCount += 1;
+        }
+      } else if (item.source === SOURCES.AHREFS) {
+        acc.totalVolume += item.volume || 0;
+        acc.totalTraffic += item.traffic || 0;
+      }
+      return acc;
+    }, {
+      totalClicks: 0,
+      totalImpressions: 0,
+      totalVolume: 0,
+      totalTraffic: 0,
+      positionSum: 0,
+      positionCount: 0
+    });
+
+    // Calculate averages
+    const avgCTR = stats.totalImpressions > 0 ? stats.totalClicks / stats.totalImpressions : 0;
+    const avgPosition = stats.positionCount > 0 ? stats.positionSum / stats.positionCount : 0;
+
+    const finalStats = {
+      totalClicks: stats.totalClicks,
+      totalImpressions: stats.totalImpressions,
+      avgCTR,
+      avgPosition,
+      totalVolume: stats.totalVolume,
+      totalTraffic: stats.totalTraffic,
+    };
+
+    console.log('📊 Quick Overview stats calculated (fast):', {
+      totalClicks: finalStats.totalClicks,
+      totalImpressions: finalStats.totalImpressions,
+      avgCTR: (finalStats.avgCTR * 100).toFixed(2) + '%',
+      avgPosition: finalStats.avgPosition.toFixed(2),
+      dataProcessed: dataToProcess.length,
+      totalAvailable: quickViewFilteredData.length
+    });
+
+    return finalStats;
+  }, [quickViewData.data, sectionFilters.quickView.dateRange, sectionFilters.quickView.enableComparison, sectionFilters.quickView.comparisonPreset, quickViewData.loading]);
+
+  // Comparison stats for Quick Overview (when comparison is enabled)
+  const quickViewComparisonStats = useMemo(() => {
+    if (!sectionFilters.quickView.enableComparison || !sectionFilters.quickView.comparisonDateRange) {
+      return null;
+    }
+    // TODO: Implement comparison stats when needed
+    return null;
+  }, [sectionFilters.quickView.enableComparison, sectionFilters.quickView.comparisonDateRange]);
+
+  // Handler functions for the component
+      const actualLatest = new Date(
+        quickViewFilteredData.reduce((max, item) => Math.max(max, new Date(item.date).getTime()), -Infinity)
+      ).toISOString().split('T')[0];
       console.log('📅 Actual date range in filtered data:', {
         earliest: actualEarliest,
         latest: actualLatest,
@@ -508,33 +488,26 @@ export default function Dashboard() {
       });
     }
 
-    // For Quick View, we use aggregated GSC data (no dimensions), which returns totals for the entire period
-    // This data will have the end date assigned to it, which is correct for aggregated metrics
-    const gscTimeSeriesData = sectionFilteredData.quickView.filter(item => 
+    // Separate GSC time series data (for totals) from query-level data (for averages)
+    const gscTimeSeriesData = quickViewFilteredData.filter(item => 
       item.source === SOURCES.GSC && 
       (item.query === 'Total' || item.query === '' || !item.query)
     );
     
-    console.log('📊 GSC aggregated data for Quick View:', {
-      totalRows: gscTimeSeriesData.length,
-      sampleData: gscTimeSeriesData.slice(0, 2),
-      explanation: 'Aggregated GSC data represents totals for the entire date range, assigned to end date'
-    });
-    
-    const gscQueryData = sectionFilteredData.quickView.filter(item => 
+    const gscQueryData = quickViewFilteredData.filter(item => 
       item.source === SOURCES.GSC && 
       item.query && 
       item.query !== 'Total' && 
       item.query !== ''
     );
     
-    const ahrefsData = sectionFilteredData.quickView.filter(item => item.source === SOURCES.AHREFS);
+    const ahrefsData = quickViewFilteredData.filter(item => item.source === SOURCES.AHREFS);
     
     console.log('📊 Data breakdown for Quick Overview:', {
       gscTimeSeries: gscTimeSeriesData.length,
       gscQueryLevel: gscQueryData.length, 
       ahrefs: ahrefsData.length,
-      total: sectionFilteredData.quickView.length,
+      total: quickViewFilteredData.length,
       sampleTimeSeries: gscTimeSeriesData.slice(0, 3).map(item => ({
         date: item.date,
         clicks: item.clicks,
@@ -661,7 +634,7 @@ export default function Dashboard() {
       
       // Group position data by date and calculate daily averages
       const dailyPositions = new Map<string, number[]>();
-      sectionFilteredData.quickView.forEach(item => {
+      quickViewFilteredData.forEach(item => {
         if (item.source === SOURCES.GSC && item.position && item.position > 0) {
           const positions = dailyPositions.get(item.date) || [];
           positions.push(item.position);
@@ -673,7 +646,7 @@ export default function Dashboard() {
       let totalWeightedPosition = 0;
       let totalWeight = 0;
       
-      dailyPositions.forEach((positions, date) => {
+      dailyPositions.forEach((positions) => {
         const dailyAvg = positions.reduce((sum, pos) => sum + pos, 0) / positions.length;
         totalWeightedPosition += dailyAvg * positions.length; // Weight by number of queries
         totalWeight += positions.length;
@@ -704,7 +677,7 @@ export default function Dashboard() {
       console.log('⚠️ No position data found, trying final fallback...');
       
       const allGSCPositions: number[] = [];
-      sectionFilteredData.quickView.forEach(item => {
+      quickViewFilteredData.forEach(item => {
         if (item.source === SOURCES.GSC && item.position && item.position > 0) {
           allGSCPositions.push(item.position);
         }
@@ -740,11 +713,11 @@ export default function Dashboard() {
         queryDataPoints: gscQueryData.length,
         totalImpressionPositions: allImpressionPositions.length
       },
-      totalGSCDataPoints: sectionFilteredData.quickView.filter(item => item.source === SOURCES.GSC).length
+      totalGSCDataPoints: quickViewFilteredData.filter(item => item.source === SOURCES.GSC).length
     });
 
     return stats;
-  }, [sectionFilteredData.quickView, sectionFilters.quickView.dateRange, sectionFilters.quickView.enableComparison, sectionFilters.quickView.comparisonPreset, data.length]);
+  }, [quickViewData.data, sectionFilters.quickView.dateRange, sectionFilters.quickView.enableComparison, sectionFilters.quickView.comparisonPreset, quickViewData.loading]);
 
   // Comparison stats for Quick Overview (when comparison is enabled)
   const quickViewComparisonStats = useMemo(() => {
@@ -752,38 +725,26 @@ export default function Dashboard() {
       return null;
     }
 
-    console.log('🔍 Calculating Quick Overview comparison stats for:', {
-      primaryRange: `${sectionFilters.quickView.dateRange.startDate} to ${sectionFilters.quickView.dateRange.endDate}`,
-      comparisonRange: `${sectionFilters.quickView.comparisonDateRange.startDate} to ${sectionFilters.quickView.comparisonDateRange.endDate}`
+    // Filter data for comparison period
+    const comparisonStartDate = new Date((sectionFilters.quickView.comparisonDateRange as any).startDate);
+    const comparisonEndDate = new Date((sectionFilters.quickView.comparisonDateRange as any).endDate);
+    
+    const comparisonData = data.filter(item => {
+      const itemDate = new Date(item.date);
+      const dateMatch = itemDate >= comparisonStartDate && itemDate <= comparisonEndDate;
+      // Use the same source filtering logic as the main data (currently includes all sources)
+      return dateMatch;
     });
 
-    // Check if comparison period is within available data range
-    const allDates = data.map(item => new Date(item.date)).sort((a, b) => a.getTime() - b.getTime());
-    const earliestDataDate = allDates[0];
-    const comparisonStart = new Date(sectionFilters.quickView.comparisonDateRange.startDate);
-    
-    if (earliestDataDate && comparisonStart < earliestDataDate) {
-      console.warn('⚠️ Comparison period extends before available data:', {
-        comparisonStart: comparisonStart.toISOString().split('T')[0],
-        earliestData: earliestDataDate.toISOString().split('T')[0],
-        daysBefore: Math.ceil((earliestDataDate.getTime() - comparisonStart.getTime()) / (1000 * 60 * 60 * 24))
-      });
-    }
-
-    // Use dedicated comparison GSC data
-    const comparisonData = comparisonGSCData.data || [];
-    
-    console.log('🔍 Comparison GSC data fetch status:', {
-      enabled: comparisonGSCData.enabled,
-      loading: comparisonGSCData.loading,
-      error: comparisonGSCData.error,
-      dataCount: comparisonData.length,
-      comparisonDateRange: sectionFilters.quickView.comparisonDateRange
+    console.log('📊 Comparison data breakdown:', {
+      totalComparisonData: comparisonData.length,
+      gscComparisonData: comparisonData.filter(item => item.source === SOURCES.GSC).length,
+      comparisonDataSample: comparisonData.slice(0, 5),
+      comparisonDataDates: [...new Set(comparisonData.map(item => item.date))].sort(),
+      queryLevelComparisonData: comparisonData.filter(item => item.source === SOURCES.GSC && item.query && item.query !== 'Total').length
     });
 
-    console.log('📊 Comparison data points:', comparisonData.length);
-
-      const comparisonStats = {
+    const comparisonStats = {
       totalClicks: 0,
       totalImpressions: 0,
       avgCTR: 0,
@@ -830,6 +791,18 @@ export default function Dashboard() {
     // GSC Average Position: "topmost position... averaged across all impressions"
     const comparisonImpressionPositions: number[] = [];
 
+    console.log('🎯 Comparison Average Position debugging:', {
+      comparisonGscQueryDataCount: comparisonGscQueryData.length,
+      comparisonGscQueryDataSample: comparisonGscQueryData.slice(0, 5).map(item => ({
+        query: item.query,
+        position: item.position,
+        impressions: item.impressions,
+        date: item.date,
+        hasValidPosition: item.position && item.position > 0,
+        hasValidImpressions: item.impressions && item.impressions > 0
+      }))
+    });
+
     comparisonGscQueryData.forEach(item => {
       // Only use GSC query data for position calculation - weight by impressions
       if (item.position && item.position > 0 && item.query && item.impressions && item.impressions > 0) {
@@ -841,10 +814,40 @@ export default function Dashboard() {
       }
     });
 
+    console.log('🎯 Comparison position calculation result:', {
+      totalImpressionPositions: comparisonImpressionPositions.length,
+      calculatedAvgPosition: comparisonImpressionPositions.length > 0 
+        ? comparisonImpressionPositions.reduce((sum, pos) => sum + pos, 0) / comparisonImpressionPositions.length 
+        : 0,
+      hasValidPosition: comparisonImpressionPositions.length > 0
+    });
+
     // Calculate comparison period average position across all impressions (true GSC methodology)
-    comparisonStats.avgPosition = comparisonImpressionPositions.length > 0 
-      ? comparisonImpressionPositions.reduce((sum, pos) => sum + pos, 0) / comparisonImpressionPositions.length 
-      : 0;
+    if (comparisonImpressionPositions.length > 0) {
+      comparisonStats.avgPosition = comparisonImpressionPositions.reduce((sum, pos) => sum + pos, 0) / comparisonImpressionPositions.length;
+    } else {
+      // Fallback: If no query-level data for comparison period, use time-series position data if available
+      const comparisonTimeSeriesWithPosition = comparisonGscTimeSeriesData.filter(item => item.position && item.position > 0);
+      if (comparisonTimeSeriesWithPosition.length > 0) {
+        // Weight by impressions if available
+        const weightedPositions = comparisonTimeSeriesWithPosition.map(item => ({
+          position: item.position,
+          weight: item.impressions || 1
+        }));
+        const totalWeight = weightedPositions.reduce((sum, item) => sum + item.weight, 0);
+        const weightedSum = weightedPositions.reduce((sum, item) => sum + (item.position * item.weight), 0);
+        comparisonStats.avgPosition = totalWeight > 0 ? weightedSum / totalWeight : 0;
+        
+        console.log('🔄 Using time-series fallback for comparison position:', {
+          timeSeriesWithPosition: comparisonTimeSeriesWithPosition.length,
+          weightedAvgPosition: comparisonStats.avgPosition,
+          fallbackMethod: 'time-series-weighted'
+        });
+      } else {
+        comparisonStats.avgPosition = 0;
+        console.log('⚠️ No position data available for comparison period');
+      }
+    }
     comparisonStats.avgCTR = comparisonStats.totalImpressions > 0 ? comparisonStats.totalClicks / comparisonStats.totalImpressions : 0;
 
     // Calculate percentage changes
@@ -868,86 +871,102 @@ export default function Dashboard() {
     });
 
     return { current: quickViewStats, previous: comparisonStats, changes };
-  }, [quickViewStats, sectionFilters.quickView.enableComparison, sectionFilters.quickView.comparisonDateRange, sectionFilters.quickView.dateRange.startDate, sectionFilters.quickView.dateRange.endDate, data, filters.sources]);
+  }, [quickViewStats, sectionFilters.quickView.enableComparison, sectionFilters.quickView.comparisonDateRange, sectionFilters.quickView.dateRange.startDate, sectionFilters.quickView.dateRange.endDate, data]);
 
-  // Prepare separate data for tabbed tables
-  const ahrefsTableData = useMemo(() => {
-    return data.filter(item => item.source === SOURCES.AHREFS);
-  }, [data]);
-
-  // Prepare Ahrefs comparison data by filtering by date ranges
-  const ahrefsComparisonData = useMemo(() => {
-    // For Ahrefs, each row already contains comparison data (traffic vs previousTraffic)
-    // We don't need to filter by date ranges like GSC data
-    console.log('🔍 Ahrefs Comparison Data Prepared:', {
-      enableComparison: sectionFilters.table.enableComparison,
-      totalAhrefsData: ahrefsTableData.length,
-      sampleData: ahrefsTableData.slice(0, 3).map(item => ({
-        query: item.query,
-        traffic: item.traffic,
-        previousTraffic: item.previousTraffic,
-        hasComparisonData: !!(item.traffic && item.previousTraffic)
-      }))
-    });
-
-    // Return all Ahrefs data for comparison table - it will use built-in previousTraffic/previousPosition
-    return { current: ahrefsTableData, comparison: [] };
-  }, [ahrefsTableData, sectionFilters.table.enableComparison]);
+  
 
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
-    // Validate file
-    const validation = validateCSVFile(file);
-    if (!validation.valid) {
-      alert(validation.error);
-      return;
-    }
-
     setLoading(true);
+    
     try {
-      // Read file content
-      const csvContent = await readFileAsText(file);
-      
-      // Parse CSV
-      const parseResult = await parseAhrefsCSV(csvContent);
-      
-      if (parseResult.success && parseResult.data) {
-        // Normalize and add to existing data
-        const normalizedData = normalizeAhrefsData(parseResult.data);
-        const gscData = data.filter(item => item.source === SOURCES.GSC);
-        const newData = [...gscData, ...normalizedData];
-        
-        setData(newData);
-        
-        // Save to persistent storage
-        try {
-          await saveDataToStorage(newData);
-          console.log('Ahrefs data saved to storage');
-        } catch (error) {
-          console.error('Failed to save Ahrefs data:', error);
-        }
-        
-        // Show success message
-        const successMessage = `✅ Successfully imported ${parseResult.validRows} rows from ${parseResult.totalRows} total rows.`;
-        alert(successMessage);
-        
-        if (parseResult.errors && parseResult.errors.length > 0) {
-          console.warn('Import warnings:', parseResult.errors);
-          if (parseResult.errors.length < 10) {
-            alert(`⚠️ Some rows had issues:\n${parseResult.errors.slice(0, 5).join('\n')}`);
-          }
-        }
-      } else {
-        alert(`Failed to import CSV: ${parseResult.errors?.join(', ') || 'Unknown error'}`);
+      console.log('📊 Starting Ahrefs CSV import to MongoDB:', {
+        fileName: file.name,
+        fileSize: file.size
+      });
+
+      // Create FormData for file upload
+      const formData = new FormData();
+      formData.append('file', file);
+
+      // Call the new MongoDB Ahrefs import API
+      const response = await fetch('/api/ahrefs/import', {
+        method: 'POST',
+        body: formData
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to import Ahrefs data');
       }
+
+      console.log('✅ Ahrefs import completed:', result);
+
+      // Now fetch all data from MongoDB (both GSC and Ahrefs)
+      const dataResponse = await fetch('/api/gsc/data-mongo?limit=50000');
+      const dataResult = await dataResponse.json();
+
+      if (!dataResponse.ok) {
+        throw new Error(dataResult.error || 'Failed to load data from MongoDB');
+      }
+
+      console.log('📊 All data loaded from MongoDB:', {
+        recordCount: dataResult.data.length
+      });
+
+      // Update the dashboard with all data
+      setData(dataResult.data);
+
+      // Auto-adjust section filters to show all data
+      if (dataResult.data.length > 0) {
+        const dates = dataResult.data.map((item: any) => item.date).sort();
+        const earliestDate = dates[0];
+        const latestDate = dates[dates.length - 1];
+        
+        const newDateRange = {
+          startDate: earliestDate,
+          endDate: latestDate
+        };
+        
+        setSectionFilters(prev => ({
+          chart: { 
+            ...prev.chart, 
+            dateRange: newDateRange,
+            enableComparison: prev.chart.enableComparison,
+            comparisonPreset: prev.chart.comparisonPreset,
+            comparisonDateRange: prev.chart.comparisonDateRange
+          },
+          quickView: { 
+            ...prev.quickView, 
+            dateRange: newDateRange,
+            enableComparison: prev.quickView.enableComparison,
+            comparisonPreset: prev.quickView.comparisonPreset,
+            comparisonDateRange: prev.quickView.comparisonDateRange
+          },
+          table: { 
+            ...prev.table, 
+            dateRange: newDateRange,
+            enableComparison: prev.table.enableComparison,
+            comparisonPreset: prev.table.comparisonPreset,
+            comparisonDateRange: prev.table.comparisonDateRange
+          }
+        }));
+
+        console.log('📅 Auto-adjusted filters to show all data:', newDateRange);
+      }
+
+      // Show success message
+      alert(`✅ Ahrefs data imported successfully!\n\n${result.recordCount.toLocaleString()} records imported\n${result.replacedRecords > 0 ? `Replaced ${result.replacedRecords} existing records` : 'No existing data replaced'}\n\nAll data is now stored in MongoDB for fast access!`);
+
     } catch (error) {
-      console.error('CSV import error:', error);
-      alert('Failed to process CSV file. Please check the file format.');
+      console.error('Failed to import Ahrefs CSV:', error);
+      alert(`❌ Failed to import Ahrefs CSV: ${error instanceof Error ? error.message : 'Unknown error'}`);
     } finally {
       setLoading(false);
-      // Reset file input
+      // Reset the file input
       event.target.value = '';
     }
   };
@@ -964,6 +983,33 @@ export default function Dashboard() {
       // Replace existing GSC data and merge with Ahrefs data
       const ahrefsData = data.filter(item => item.source === SOURCES.AHREFS);
       const newData = [...gscData, ...ahrefsData];
+      
+      // Analyze date range of imported data
+      if (gscData.length > 0) {
+        const dates = gscData.map(item => item.date).sort();
+        const earliestDate = dates[0];
+        const latestDate = dates[dates.length - 1];
+        
+        console.log('📅 Imported GSC data date range:', {
+          earliest: earliestDate,
+          latest: latestDate,
+          totalDays: Math.ceil((new Date(latestDate).getTime() - new Date(earliestDate).getTime()) / (1000 * 60 * 60 * 24)),
+          uniqueDates: [...new Set(dates)].length
+        });
+        
+        // Auto-adjust section filters to match imported data range
+        const dataDateRange = {
+          startDate: earliestDate,
+          endDate: latestDate
+        };
+        
+        console.log('🔧 Auto-adjusting section filters to match imported data range');
+        setSectionFilters({
+          chart: { dateRange: dataDateRange, enableComparison: false, comparisonPreset: undefined, comparisonDateRange: undefined },
+          quickView: { dateRange: dataDateRange, enableComparison: false, comparisonPreset: undefined, comparisonDateRange: undefined },
+          table: { dateRange: dataDateRange, enableComparison: false, comparisonPreset: undefined, comparisonDateRange: undefined },
+        });
+      }
       
       console.log('📊 Setting new data:', {
         gscCount: gscData.length,
@@ -1085,7 +1131,7 @@ search console api,https://example.com/api-docs,12,500,25,3.20,80,2024-01-01,60,
                         <div>For best results, export Ahrefs data comparing two dates:</div>
                         <div><strong>Example:</strong> Today vs 90 days ago</div>
                         <div>This includes change columns: position change, traffic change, etc.</div>
-                        </div>
+                      </div>
                     </div>
                   </div>
                   
@@ -1110,26 +1156,26 @@ search console api,https://example.com/api-docs,12,500,25,3.20,80,2024-01-01,60,
                 <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
                   Imported Data Status
                 </h2>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={async () => {
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={async () => {
                     if (confirm('Are you sure you want to clear all imported data? This cannot be undone.')) {
                       try {
-                                await clearStoredData();
-                                setData([]);
+                        await clearStoredData();
+                        setData([]);
                         console.log('All data cleared');
-                              } catch (error) {
+                      } catch (error) {
                         console.error('Failed to clear data:', error);
                         alert('Failed to clear data. Please try again.');
-                              }
-                            }
-                          }}
+                      }
+                    }
+                  }}
                   className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                        >
+                >
                   Clear All Data
-                        </Button>
-                      </div>
+                </Button>
+              </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {/* GSC Data Status */}
                 {data.some(item => item.source === 'gsc') && (
@@ -1163,21 +1209,21 @@ search console api,https://example.com/api-docs,12,500,25,3.20,80,2024-01-01,60,
                       <span className="font-medium text-orange-900 dark:text-orange-100">Ahrefs</span>
                     </div>
                     <div className="text-sm text-orange-700 dark:text-orange-300">
-                        {(() => {
-                          const ahrefsData = data.filter(item => item.source === 'ahrefs');
-                          const dates = ahrefsData.map(item => item.date).sort();
-                          const startDate = dates[0];
-                          const endDate = dates[dates.length - 1];
-                          return (
-                            <>
-                              <div><strong>Date Range:</strong> {startDate} to {endDate}</div>
-                              <div><strong>Data Points:</strong> {ahrefsData.length.toLocaleString()}</div>
-                            </>
-                          );
-                        })()}
-                      </div>
+                      {(() => {
+                        const ahrefsData = data.filter(item => item.source === 'ahrefs');
+                        const dates = ahrefsData.map(item => item.date).sort();
+                        const startDate = dates[0];
+                        const endDate = dates[dates.length - 1];
+                        return (
+                          <>
+                            <div><strong>Date Range:</strong> {startDate} to {endDate}</div>
+                            <div><strong>Data Points:</strong> {ahrefsData.length.toLocaleString()}</div>
+                          </>
+                        );
+                      })()}
                     </div>
-                  )}
+                  </div>
+                )}
               </div>
               
               {/* Overall Coverage */}
@@ -1189,9 +1235,9 @@ search console api,https://example.com/api-docs,12,500,25,3.20,80,2024-01-01,60,
                     const endDate = allDates[allDates.length - 1];
                     return `${startDate} to ${endDate} (${data.length.toLocaleString()} total data points)`;
                   })()}
-                    </div>
-                  </div>
                 </div>
+              </div>
+            </div>
           </div>
         )}
 
@@ -1219,12 +1265,29 @@ search console api,https://example.com/api-docs,12,500,25,3.20,80,2024-01-01,60,
               className="border border-green-200 bg-green-50/50 dark:border-green-800 dark:bg-green-900/20"
             />
             
-            {/* Overview date range display */}
+            {/* Overview date range and connection status */}
             <div className="flex items-center justify-between text-sm text-gray-600 dark:text-gray-400">
-              <span>Showing data for:</span>
-                <span>
-                {new Date(sectionFilters.quickView.dateRange.startDate).toISOString().split('T')[0]} - {new Date(sectionFilters.quickView.dateRange.endDate).toISOString().split('T')[0]}
-                </span>
+              <div className="flex items-center space-x-4">
+                <span>Showing data for:</span>
+                <ClientOnly>
+                  <span>
+                    {sectionFilters.quickView.dateRange.startDate && new Date(sectionFilters.quickView.dateRange.startDate).toLocaleDateString()} - {sectionFilters.quickView.dateRange.endDate && new Date(sectionFilters.quickView.dateRange.endDate).toLocaleDateString()}
+                  </span>
+                </ClientOnly>
+              </div>
+              <div className="flex items-center space-x-2">
+                {isAuthenticated && selectedSite ? (
+                  <div className="flex items-center space-x-1 text-green-600">
+                    <div className="w-2 h-2 rounded-full bg-green-500"></div>
+                    <span className="text-xs">GSC Connected</span>
+                  </div>
+                ) : (
+                  <div className="flex items-center space-x-1 text-orange-600">
+                    <div className="w-2 h-2 rounded-full bg-orange-500"></div>
+                    <span className="text-xs">Connect GSC below</span>
+                  </div>
+                )}
+              </div>
             </div>
             
             {/* Overview cards */}
@@ -1233,20 +1296,34 @@ search console api,https://example.com/api-docs,12,500,25,3.20,80,2024-01-01,60,
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">Total Clicks</CardTitle>
                 <div className="flex items-center space-x-1">
-                  {quickViewComparisonStats?.changes && (
-                    <div className={`text-xs font-medium ${
-                      quickViewComparisonStats.changes.clicksChange > 0 ? 'text-green-600' : 
-                      quickViewComparisonStats.changes.clicksChange < 0 ? 'text-red-600' : 
-                      'text-gray-500'
-                    }`}>
-                      {quickViewComparisonStats.changes.clicksChange > 0 ? '+' : ''}{quickViewComparisonStats.changes.clicksChange}%
-                    </div>
+                  {quickViewData.loading ? (
+                    <div className="animate-spin h-4 w-4 border-2 border-gray-300 border-t-blue-600 rounded-full"></div>
+                  ) : (
+                    <>
+                      {quickViewComparisonStats?.changes && (
+                        <div className={`text-xs font-medium ${
+                          quickViewComparisonStats.changes.clicksChange > 0 ? 'text-green-600' : 
+                          quickViewComparisonStats.changes.clicksChange < 0 ? 'text-red-600' : 
+                          'text-gray-500'
+                        }`}>
+                          {quickViewComparisonStats.changes.clicksChange > 0 ? '+' : ''}{quickViewComparisonStats.changes.clicksChange}%
+                        </div>
+                      )}
+                      <TrendingUp className="h-4 w-4 text-muted-foreground" />
+                    </>
                   )}
-                  <TrendingUp className="h-4 w-4 text-muted-foreground" />
                 </div>
               </CardHeader>
               <CardContent>
-                {sectionFilters.quickView.enableComparison && quickViewComparisonStats?.changes ? (
+                {quickViewData.loading ? (
+                  <div className="text-2xl font-bold text-gray-400">
+                    Loading...
+                  </div>
+                ) : quickViewData.error ? (
+                  <div className="text-2xl font-bold text-red-500">
+                    Error
+                  </div>
+                ) : sectionFilters.quickView.enableComparison && quickViewComparisonStats?.changes ? (
                   <div>
                     <div className="text-lg font-bold text-gray-700 dark:text-gray-300">
                       {quickViewStats.totalClicks.toLocaleString()} vs {quickViewComparisonStats.previous.totalClicks.toLocaleString()}
@@ -1260,6 +1337,11 @@ search console api,https://example.com/api-docs,12,500,25,3.20,80,2024-01-01,60,
                     {quickViewStats.totalClicks.toLocaleString()}
                   </div>
                 )}
+                <p className="text-xs text-muted-foreground mt-2">
+                  {quickViewData.loading ? 'Loading data...' : 
+                   quickViewData.error ? `Error: ${quickViewData.error}` :
+                   `From ${quickViewData.data?.length || 0} data points`}
+                </p>
               </CardContent>
             </Card>
 
@@ -1267,20 +1349,34 @@ search console api,https://example.com/api-docs,12,500,25,3.20,80,2024-01-01,60,
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">Impressions</CardTitle>
                 <div className="flex items-center space-x-1">
-                  {quickViewComparisonStats?.changes && (
-                    <div className={`text-xs font-medium ${
-                      quickViewComparisonStats.changes.impressionsChange > 0 ? 'text-green-600' : 
-                      quickViewComparisonStats.changes.impressionsChange < 0 ? 'text-red-600' : 
-                      'text-gray-500'
-                    }`}>
-                      {quickViewComparisonStats.changes.impressionsChange > 0 ? '+' : ''}{quickViewComparisonStats.changes.impressionsChange}%
-                    </div>
+                  {quickViewData.loading ? (
+                    <div className="animate-spin h-4 w-4 border-2 border-gray-300 border-t-blue-600 rounded-full"></div>
+                  ) : (
+                    <>
+                      {quickViewComparisonStats?.changes && (
+                        <div className={`text-xs font-medium ${
+                          quickViewComparisonStats.changes.impressionsChange > 0 ? 'text-green-600' : 
+                          quickViewComparisonStats.changes.impressionsChange < 0 ? 'text-red-600' : 
+                          'text-gray-500'
+                        }`}>
+                          {quickViewComparisonStats.changes.impressionsChange > 0 ? '+' : ''}{quickViewComparisonStats.changes.impressionsChange}%
+                        </div>
+                      )}
+                      <TrendingUp className="h-4 w-4 text-muted-foreground" />
+                    </>
                   )}
-                  <TrendingUp className="h-4 w-4 text-muted-foreground" />
                 </div>
               </CardHeader>
               <CardContent>
-                {sectionFilters.quickView.enableComparison && quickViewComparisonStats?.changes ? (
+                {quickViewData.loading ? (
+                  <div className="text-2xl font-bold text-gray-400">
+                    Loading...
+                  </div>
+                ) : quickViewData.error ? (
+                  <div className="text-2xl font-bold text-red-500">
+                    Error
+                  </div>
+                ) : sectionFilters.quickView.enableComparison && quickViewComparisonStats?.changes ? (
                   <div>
                     <div className="text-lg font-bold text-gray-700 dark:text-gray-300">
                       {quickViewStats.totalImpressions.toLocaleString()} vs {quickViewComparisonStats.previous.totalImpressions.toLocaleString()}
@@ -1294,6 +1390,11 @@ search console api,https://example.com/api-docs,12,500,25,3.20,80,2024-01-01,60,
                     {quickViewStats.totalImpressions.toLocaleString()}
                   </div>
                 )}
+                <p className="text-xs text-muted-foreground mt-2">
+                  {quickViewData.loading ? 'Loading data...' : 
+                   quickViewData.error ? `Error: ${quickViewData.error}` :
+                   'From GSC data'}
+                </p>
               </CardContent>
             </Card>
 
@@ -1301,20 +1402,34 @@ search console api,https://example.com/api-docs,12,500,25,3.20,80,2024-01-01,60,
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">Avg. CTR</CardTitle>
                 <div className="flex items-center space-x-1">
-                  {quickViewComparisonStats?.changes && (
-                    <div className={`text-xs font-medium ${
-                      quickViewComparisonStats.changes.ctrChange > 0 ? 'text-green-600' : 
-                      quickViewComparisonStats.changes.ctrChange < 0 ? 'text-red-600' : 
-                      'text-gray-500'
-                    }`}>
-                      {quickViewComparisonStats.changes.ctrChange > 0 ? '+' : ''}{quickViewComparisonStats.changes.ctrChange}%
-                    </div>
+                  {quickViewData.loading ? (
+                    <div className="animate-spin h-4 w-4 border-2 border-gray-300 border-t-blue-600 rounded-full"></div>
+                  ) : (
+                    <>
+                      {quickViewComparisonStats?.changes && (
+                        <div className={`text-xs font-medium ${
+                          quickViewComparisonStats.changes.ctrChange > 0 ? 'text-green-600' : 
+                          quickViewComparisonStats.changes.ctrChange < 0 ? 'text-red-600' : 
+                          'text-gray-500'
+                        }`}>
+                          {quickViewComparisonStats.changes.ctrChange > 0 ? '+' : ''}{quickViewComparisonStats.changes.ctrChange}%
+                        </div>
+                      )}
+                      <TrendingUp className="h-4 w-4 text-muted-foreground" />
+                    </>
                   )}
-                  <TrendingUp className="h-4 w-4 text-muted-foreground" />
                 </div>
               </CardHeader>
               <CardContent>
-                {sectionFilters.quickView.enableComparison && quickViewComparisonStats?.changes ? (
+                {quickViewData.loading ? (
+                  <div className="text-2xl font-bold text-gray-400">
+                    Loading...
+                  </div>
+                ) : quickViewData.error ? (
+                  <div className="text-2xl font-bold text-red-500">
+                    Error
+                  </div>
+                ) : sectionFilters.quickView.enableComparison && quickViewComparisonStats?.changes ? (
                   <div>
                     <div className="text-lg font-bold text-gray-700 dark:text-gray-300">
                       {(quickViewStats.avgCTR * 100).toFixed(1)}% vs {(quickViewComparisonStats.previous.avgCTR * 100).toFixed(1)}%
@@ -1328,6 +1443,11 @@ search console api,https://example.com/api-docs,12,500,25,3.20,80,2024-01-01,60,
                     {(quickViewStats.avgCTR * 100).toFixed(1)}%
                   </div>
                 )}
+                <p className="text-xs text-muted-foreground mt-2">
+                  {quickViewData.loading ? 'Loading data...' : 
+                   quickViewData.error ? `Error: ${quickViewData.error}` :
+                   'Click-through rate'}
+                </p>
               </CardContent>
             </Card>
 
@@ -1335,20 +1455,34 @@ search console api,https://example.com/api-docs,12,500,25,3.20,80,2024-01-01,60,
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">Avg. Position</CardTitle>
                 <div className="flex items-center space-x-1">
-                  {quickViewComparisonStats?.changes && (
-                    <div className={`text-xs font-medium ${
-                      quickViewComparisonStats.changes.positionChange > 0 ? 'text-green-600' : 
-                      quickViewComparisonStats.changes.positionChange < 0 ? 'text-red-600' : 
-                      'text-gray-500'
-                    }`}>
-                      {quickViewComparisonStats.changes.positionChange > 0 ? '+' : ''}{quickViewComparisonStats.changes.positionChange}%
-                    </div>
+                  {quickViewData.loading ? (
+                    <div className="animate-spin h-4 w-4 border-2 border-gray-300 border-t-blue-600 rounded-full"></div>
+                  ) : (
+                    <>
+                      {quickViewComparisonStats?.changes && (
+                        <div className={`text-xs font-medium ${
+                          quickViewComparisonStats.changes.positionChange > 0 ? 'text-green-600' : 
+                          quickViewComparisonStats.changes.positionChange < 0 ? 'text-red-600' : 
+                          'text-gray-500'
+                        }`}>
+                          {quickViewComparisonStats.changes.positionChange > 0 ? '+' : ''}{quickViewComparisonStats.changes.positionChange}%
+                        </div>
+                      )}
+                      <TrendingUp className="h-4 w-4 text-muted-foreground" />
+                    </>
                   )}
-                  <TrendingUp className="h-4 w-4 text-muted-foreground" />
                 </div>
               </CardHeader>
               <CardContent>
-                {sectionFilters.quickView.enableComparison && quickViewComparisonStats?.changes && quickViewStats.avgPosition > 0 ? (
+                {quickViewData.loading ? (
+                  <div className="text-2xl font-bold text-gray-400">
+                    Loading...
+                  </div>
+                ) : quickViewData.error ? (
+                  <div className="text-2xl font-bold text-red-500">
+                    Error
+                  </div>
+                ) : sectionFilters.quickView.enableComparison && quickViewComparisonStats?.changes && quickViewStats.avgPosition > 0 ? (
                   <div>
                     <div className="text-lg font-bold text-gray-700 dark:text-gray-300">
                       {quickViewStats.avgPosition.toFixed(1)} vs {quickViewComparisonStats.previous.avgPosition.toFixed(1)}
@@ -1362,6 +1496,11 @@ search console api,https://example.com/api-docs,12,500,25,3.20,80,2024-01-01,60,
                     {quickViewStats.avgPosition > 0 ? quickViewStats.avgPosition.toFixed(1) : 'N/A'}
                   </div>
                 )}
+                <p className="text-xs text-muted-foreground mt-2">
+                  {quickViewData.loading ? 'Loading data...' : 
+                   quickViewData.error ? `Error: ${quickViewData.error}` :
+                   'Average ranking position'}
+                </p>
               </CardContent>
             </Card>
           </div>
@@ -1370,84 +1509,47 @@ search console api,https://example.com/api-docs,12,500,25,3.20,80,2024-01-01,60,
 
         {/* Charts and Tables */}
         <div className="space-y-8">
-          {/* Performance Charts */}
-          <PerformanceChart
-            data={chartData}
-            comparisonData={chartComparisonData}
-            selectedMetrics={selectedChartMetrics}
-            onMetricsChange={setSelectedChartMetrics}
-            availableMetrics={filters.metrics.filter(metric => metric !== 'volume' && metric !== 'traffic')}
-            sectionFilters={sectionFilters.chart}
-            title="Performance Charts"
-            description="Visualize your metrics over time"
-            showSectionFilters={true}
-            onSectionFiltersChange={(newFilters) => 
-              setSectionFilters(prev => ({ ...prev, chart: newFilters }))
-            }
-            loading={chartGSCData.loading}
-            error={chartGSCData.error}
-          />
-
-          {/* Performance Data Table */}
+          {/* Performance Charts - TEMPORARILY DISABLED */}
           <Card>
             <CardHeader>
-              <div className="flex items-center justify-between">
-                <div>
-                  <CardTitle className="flex items-center space-x-2">
-                    <BarChart3 className="h-5 w-5" />
-                    <span>Performance Data</span>
-                  </CardTitle>
-                  <CardDescription>
-                    Detailed metrics for your queries and pages with independent filtering
-                  </CardDescription>
-                </div>
-              </div>
+              <CardTitle className="flex items-center space-x-2">
+                <BarChart3 className="h-5 w-5 text-gray-400" />
+                <span className="text-gray-500">Performance Charts (Temporarily Disabled)</span>
+              </CardTitle>
+              <CardDescription>
+                Charts are temporarily disabled to prevent browser freezing. Working on Quick View optimization first.
+              </CardDescription>
             </CardHeader>
-            <CardContent className="space-y-6">
-              {/* Table-specific filters */}
-              <SectionFilterPanel
-                title="Table Filters"
-                description="Control date range and comparison for table data"
-                icon={<BarChart3 className="h-4 w-4 text-purple-500" />}
-                filters={sectionFilters.table}
-                onFiltersChange={(newFilters) => 
-                  setSectionFilters(prev => ({ ...prev, table: newFilters }))
-                }
-                className="border border-purple-200 bg-purple-50/50 dark:border-purple-800 dark:bg-purple-900/20"
-              />
-              
-              {/* Table date range display */}
-              <div className="flex items-center justify-between text-sm text-gray-600 dark:text-gray-400">
-                <span>Table showing data for:</span>
-                <span>
-                  {new Date(sectionFilters.table.dateRange.startDate).toISOString().split('T')[0]} - {new Date(sectionFilters.table.dateRange.endDate).toISOString().split('T')[0]}
-                </span>
+            <CardContent>
+              <div className="p-8 text-center text-gray-500 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                <BarChart3 className="h-12 w-12 mx-auto mb-4 text-gray-300" />
+                <p>Charts will be re-enabled after Quick View optimization is complete</p>
               </div>
-              
-              {/* Tabbed Table content */}
-              <TabbedDataTable
-                data={ahrefsTableData}
-                gscData={tableGSCData.data}
-                gscComparisonData={tableComparisonGSCData.data} // Now using actual comparison data
-                ahrefsCurrentPeriodData={ahrefsComparisonData.current}
-                ahrefsComparisonData={ahrefsComparisonData.comparison} // Now using actual Ahrefs comparison data
-                fullData={data}
-                loading={loading}
-                gscLoading={tableGSCData.loading}
-                gscError={tableGSCData.error}
-                sectionFilters={sectionFilters.table}
-                onSectionFiltersChange={(newFilters) => 
-                  setSectionFilters(prev => ({ ...prev, table: newFilters }))
-                }
-              />
+            </CardContent>
+          </Card>
+
+          {/* Performance Data Tables - TEMPORARILY DISABLED */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center space-x-2">
+                <BarChart3 className="h-5 w-5 text-gray-400" />
+                <span className="text-gray-500">Data Tables (Temporarily Disabled)</span>
+              </CardTitle>
+              <CardDescription>
+                Tables are temporarily disabled to prevent browser freezing. Working on Quick View optimization first.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="p-8 text-center text-gray-500 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                <BarChart3 className="h-12 w-12 mx-auto mb-4 text-gray-300" />
+                <p>Tables will be re-enabled after Quick View optimization is complete</p>
+              </div>
             </CardContent>
           </Card>
 
           {/* Performance Clusters */}
           <PerformanceClusters
-            data={filteredData} // Ahrefs data
-            gscData={allTimeGSCData.data} // All-time GSC data for main page cluster cards
-            filteredGscData={tableGSCData.data} // Filtered GSC data for modal comparison mode
+            data={filteredData}
             filters={filters}
           />
         </div>

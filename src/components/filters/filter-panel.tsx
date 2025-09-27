@@ -11,7 +11,7 @@ import { X, Filter, RotateCcw } from 'lucide-react';
 import { DateRangePicker } from './date-range-picker';
 import { MetricSelector } from './metric-selector';
 import { FilterOptions, SOURCES, ComparisonPreset } from '@/lib/types';
-import { getComparisonPresetRanges } from '@/lib/data-utils';
+import { getGSCComparisonRanges } from '@/lib/data-utils';
 import { cn } from '@/lib/utils';
 
 interface FilterPanelProps {
@@ -153,7 +153,23 @@ export function FilterPanel({
               id="enable-comparison"
               type="checkbox"
               checked={filters.enableComparison || false}
-              onChange={(e) => updateFilters({ enableComparison: e.target.checked })}
+              onChange={(e) => {
+                const checked = e.target.checked;
+                if (checked) {
+                  // When enabling comparison, calculate default date ranges
+                  const defaultPreset = filters.comparisonPreset || 'last_28d_vs_previous';
+                  const ranges = getGSCComparisonRanges(defaultPreset);
+                  updateFilters({ 
+                    enableComparison: checked,
+                    comparisonPreset: defaultPreset,
+                    comparisonDateRange: ranges.comparison,
+                    dateRange: ranges.primary
+                  });
+                } else {
+                  // When disabling, just set enableComparison to false
+                  updateFilters({ enableComparison: checked });
+                }
+              }}
               className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 dark:focus:ring-blue-600 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600"
             />
           </div>
@@ -165,12 +181,16 @@ export function FilterPanel({
                 <Label>Comparison Period</Label>
                 <div className="grid grid-cols-1 gap-2">
                   {[
-                    { value: 'last_7d_vs_previous', label: '7 days vs Previous 7 days' },
-                    { value: 'last_14d_vs_previous', label: '14 days vs Previous 14 days' },
-                    { value: 'last_30d_vs_previous', label: '30 days vs Previous 30 days' },
-                    { value: 'last_60d_vs_previous', label: '60 days vs Previous 60 days' },
-                    { value: 'last_90d_vs_previous', label: '90 days vs Previous 90 days' },
-                    { value: 'last_120d_vs_previous', label: '120 days vs Previous 120 days' },
+                    { value: 'last_24h_vs_previous', label: 'Compare last 24 hours to previous period' },
+                    { value: 'last_7d_vs_previous', label: 'Compare last 7 days to previous period' },
+                    { value: 'last_28d_vs_previous', label: 'Compare last 28 days to previous period' },
+                    { value: 'last_3m_vs_previous', label: 'Compare last 3 months to previous period' },
+                    { value: 'last_6m_vs_previous', label: 'Compare last 6 months to previous period' },
+                    { value: 'last_24h_week_over_week', label: 'Compare last 24 hours week over week' },
+                    { value: 'last_7d_week_over_week', label: 'Compare last 7 days week over week' },
+                    { value: 'last_7d_year_over_year', label: 'Compare last 7 days year over year' },
+                    { value: 'last_28d_year_over_year', label: 'Compare last 28 days year over year' },
+                    { value: 'last_3m_year_over_year', label: 'Compare last 3 months year over year' },
                   ].map((preset) => (
                     <label key={preset.value} className="flex items-center space-x-2 cursor-pointer">
                       <input
