@@ -774,7 +774,6 @@ export default function Dashboard() {
     const comparisonData = comparisonGSCData.data || [];
     
     console.log('🔍 Comparison GSC data fetch status:', {
-      enabled: comparisonGSCData.enabled,
       loading: comparisonGSCData.loading,
       error: comparisonGSCData.error,
       dataCount: comparisonData.length,

@@ -46,7 +46,13 @@ export async function POST(request: NextRequest) {
       // Parse CSV file
       console.log('📊 Parsing Ahrefs CSV file...');
       const fileText = await file.text();
-      const ahrefsData = parseAhrefsCSV(fileText);
+      const parseResult = await parseAhrefsCSV(fileText);
+      
+      if (!parseResult.success || !parseResult.data) {
+        throw new Error(`CSV parsing failed: ${parseResult.errors?.join(', ')}`);
+      }
+      
+      const ahrefsData = parseResult.data;
       
       console.log('📊 CSV parsed successfully:', {
         recordCount: ahrefsData.length,
