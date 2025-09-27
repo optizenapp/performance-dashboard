@@ -9,7 +9,7 @@ export function normalizedMetricsToMongoDB(
   importId: string,
   siteUrl?: string
 ): Partial<IReportingData>[] {
-  return metrics.map(metric => ({
+  return metrics.map((metric: any) => ({
     // Import metadata
     importId,
     siteUrl,
@@ -21,18 +21,16 @@ export function normalizedMetricsToMongoDB(
     url: metric.url,
     page: metric.url, // Use url as page for consistency
     
-    // Metrics - reconstruct based on source and metric type
-    clicks: metric.metric_type === 'clicks' ? metric.value : undefined,
-    impressions: metric.metric_type === 'impressions' ? metric.value : undefined,
-    ctr: metric.metric_type === 'ctr' ? metric.value : undefined,
-    position: metric.metric_type === 'position' ? metric.value : undefined,
-    volume: metric.metric_type === 'volume' ? metric.value : undefined,
-    traffic: metric.metric_type === 'traffic' ? metric.value : undefined,
+    // Metrics - use direct properties from NormalizedMetric
+    clicks: metric.clicks,
+    impressions: metric.impressions,
+    ctr: metric.ctr,
+    position: metric.position,
+    volume: metric.volume,
+    traffic: metric.traffic,
     
-    // Normalized fields (keep existing structure)
+    // Normalized fields
     source: metric.source,
-    metric_type: metric.metric_type,
-    value: metric.value,
     
     // Additional metadata
     dimensions: [], // Will be filled by the import process
