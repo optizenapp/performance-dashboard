@@ -187,33 +187,6 @@ export function GSCConnection() {
             
             {/* Progress indicator removed - no longer needed with on-demand fetching */}
 
-            {/* Completion indicator removed - no longer needed with on-demand fetching */}
-            {false && (
-              <div className="mt-4 p-4 bg-green-50 border border-green-200 rounded-lg">
-                <div className="flex items-center mb-2">
-                  <div className="flex-shrink-0">
-                    <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center">
-                      <span className="text-green-600 text-lg">✅</span>
-                    </div>
-                  </div>
-                  <div className="ml-3">
-                    <h3 className="text-sm font-medium text-green-800">
-                      Import Completed Successfully!
-                    </h3>
-                  </div>
-                </div>
-                <div className="mt-2 text-sm text-green-700">
-                  <div className="grid grid-cols-1 gap-1">
-                    <div><strong>Total Records:</strong> {importStats.totalRecords.toLocaleString()}</div>
-                    <div><strong>Unique Records:</strong> {importStats.uniqueRecords.toLocaleString()}</div>
-                    <div><strong>Date Range:</strong> {importStats.dateRange}</div>
-                  </div>
-                </div>
-                <div className="mt-3 text-xs text-green-600">
-                  This message will auto-hide in 10 seconds, or click the button above to dismiss.
-                </div>
-              </div>
-            )}
 
             {/* Debug info removed - date ranges now managed in Quick View section */}
           </div>

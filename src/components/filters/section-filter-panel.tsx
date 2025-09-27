@@ -112,7 +112,7 @@ export function SectionFilterPanel({
               const checked = e.target.checked;
               if (checked) {
                 // When enabling comparison, calculate default date ranges
-                const defaultPreset = filters.comparisonPreset || 'last_28d_vs_previous';
+                const defaultPreset = filters.comparisonPreset || 'last_30d_vs_previous';
                 const ranges = getGSCComparisonRanges(defaultPreset);
                 updateFilters({ 
                   enableComparison: checked,
@@ -220,20 +220,13 @@ export function SectionFilterPanel({
                     onChange={(e) => {
                       const value = e.target.value as ComparisonPreset;
                       
-                      if (value === 'custom') {
-                        // For custom, just set the preset and keep current dates
-                        updateFilters({ 
-                          comparisonPreset: value
-                        });
-                      } else {
-                        // For presets, calculate the date ranges
-                        const ranges = getGSCComparisonRanges(value);
-                        updateFilters({ 
-                          comparisonPreset: value,
-                          comparisonDateRange: ranges.comparison,
-                          dateRange: ranges.primary 
-                        });
-                      }
+                      // Calculate the date ranges for the preset
+                      const ranges = getGSCComparisonRanges(value);
+                      updateFilters({ 
+                        comparisonPreset: value,
+                        comparisonDateRange: ranges.comparison,
+                        dateRange: ranges.primary 
+                      });
                     }}
                     className="w-3 h-3 text-blue-600 bg-gray-100 border-gray-300 focus:ring-blue-500 dark:focus:ring-blue-600 dark:ring-offset-gray-800 focus:ring-1 dark:bg-gray-700 dark:border-gray-600"
                   />
@@ -242,30 +235,8 @@ export function SectionFilterPanel({
               ))}
             </div>
 
-            {/* Custom Date Range Selectors (only show for custom preset and GSC) */}
-            {activeTab !== 'ahrefs' && filters.comparisonPreset === 'custom' && (
-              <div className="space-y-4 p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
-                <div className="space-y-2">
-                  <Label className="text-sm font-medium">Primary Period</Label>
-                  <DateRangePicker
-                    dateRange={filters.dateRange}
-                    onDateRangeChange={(range) => updateFilters({ dateRange: range })}
-                    className="w-full"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label className="text-sm font-medium">Comparison Period</Label>
-                  <DateRangePicker
-                    dateRange={filters.comparisonDateRange || { startDate: '', endDate: '' }}
-                    onDateRangeChange={(range) => updateFilters({ comparisonDateRange: range })}
-                    className="w-full"
-                  />
-                </div>
-              </div>
-            )}
-            
-            {/* Show calculated ranges for presets (hide for custom) */}
-            {filters.comparisonPreset !== 'custom' && (
+            {/* Show calculated ranges for presets */}
+            {filters.comparisonPreset && (
               <div className="text-xs text-gray-500 bg-gray-50 dark:bg-gray-800 p-3 rounded mt-3">
                 <div><strong>Primary Period:</strong> {filters.dateRange.startDate} to {filters.dateRange.endDate}</div>
                 {filters.comparisonDateRange && (

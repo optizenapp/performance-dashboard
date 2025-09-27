@@ -157,7 +157,7 @@ export function FilterPanel({
                 const checked = e.target.checked;
                 if (checked) {
                   // When enabling comparison, calculate default date ranges
-                  const defaultPreset = filters.comparisonPreset || 'last_28d_vs_previous';
+                  const defaultPreset = filters.comparisonPreset || 'last_30d_vs_previous';
                   const ranges = getGSCComparisonRanges(defaultPreset);
                   updateFilters({ 
                     enableComparison: checked,
@@ -200,7 +200,7 @@ export function FilterPanel({
                         checked={filters.comparisonPreset === preset.value}
                         onChange={(e) => {
                           const value = e.target.value as ComparisonPreset;
-                          const ranges = getComparisonPresetRanges(value);
+                          const ranges = getGSCComparisonRanges(value);
                           updateFilters({ 
                             comparisonPreset: value,
                             comparisonDateRange: ranges.comparison,

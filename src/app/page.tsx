@@ -951,38 +951,6 @@ export default function Dashboard() {
     }
   };
 
-  const handleGSCData = async (gscData: NormalizedMetric[]) => {
-    console.log('📊 handleGSCData called with:', {
-      gscDataCount: gscData.length,
-      gscSample: gscData.slice(0, 3),
-      currentDataCount: data.length,
-      currentAhrefsCount: data.filter(item => item.source === SOURCES.AHREFS).length
-    });
-
-    try {
-      // Replace existing GSC data and merge with Ahrefs data
-      const ahrefsData = data.filter(item => item.source === SOURCES.AHREFS);
-      const newData = [...gscData, ...ahrefsData];
-      
-      console.log('📊 Setting new data:', {
-        gscCount: gscData.length,
-        ahrefsCount: ahrefsData.length,
-        totalCount: newData.length,
-        newDataSample: newData.slice(0, 3)
-      });
-      
-      setData(newData);
-      
-      // Save to persistent storage
-      await saveDataToStorage(newData);
-      console.log('GSC data saved to storage');
-    } catch (error) {
-      console.error('Failed to save GSC data:', error);
-      // Still update the UI even if storage fails
-      const ahrefsData = data.filter(item => item.source === SOURCES.AHREFS);
-      setData([...gscData, ...ahrefsData]);
-    }
-  };
 
   const downloadSampleCSV = () => {
     const sampleCSV = `Keyword,Current URL,Current position,Volume,KD,CPC,Current organic traffic,Current date,Previous organic traffic,Organic traffic change,Previous position,Position change,Previous date
@@ -1029,9 +997,7 @@ search console api,https://example.com/api-docs,12,500,25,3.20,80,2024-01-01,60,
           </h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {/* Google Search Console */}
-            <GSCConnection 
-              onDataFetch={handleGSCData}
-            />
+            <GSCConnection />
 
             {/* Ahrefs CSV Upload */}
             <Card>
@@ -1431,14 +1397,14 @@ search console api,https://example.com/api-docs,12,500,25,3.20,80,2024-01-01,60,
                 ahrefsCurrentPeriodData={ahrefsComparisonData.current}
                 ahrefsComparisonData={ahrefsComparisonData.comparison} // Now using actual Ahrefs comparison data
                 fullData={data}
-                loading={loading}
+            loading={loading}
                 gscLoading={tableGSCData.loading}
                 gscError={tableGSCData.error}
-                sectionFilters={sectionFilters.table}
-                onSectionFiltersChange={(newFilters) => 
-                  setSectionFilters(prev => ({ ...prev, table: newFilters }))
-                }
-              />
+            sectionFilters={sectionFilters.table}
+            onSectionFiltersChange={(newFilters) => 
+              setSectionFilters(prev => ({ ...prev, table: newFilters }))
+            }
+          />
             </CardContent>
           </Card>
 

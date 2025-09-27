@@ -244,7 +244,26 @@ export function AhrefsDataTable({
       'Current URL': row.currentUrl
     }));
 
-    exportToCSV(exportData, 'ahrefs-performance-data.csv');
+    // Generate CSV content
+    const headers = Object.keys(exportData[0] || {});
+    const csvContent = [
+      headers.join(','),
+      ...exportData.map(row => 
+        headers.map(header => {
+          const value = row[header as keyof typeof row];
+          return typeof value === 'string' && value.includes(',') ? `"${value}"` : value;
+        }).join(',')
+      )
+    ].join('\n');
+
+    // Download CSV
+    const blob = new Blob([csvContent], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'ahrefs-performance-data.csv';
+    a.click();
+    URL.revokeObjectURL(url);
   };
 
   const SortIcon = ({ field }: { field: SortField }) => {

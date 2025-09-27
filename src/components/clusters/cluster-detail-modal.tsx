@@ -466,17 +466,16 @@ export function ClusterDetailModal({
     if (enableComparison) {
       // Comparison mode: Show only GSC data with comparison functionality
       return data
-        .filter(item => item.gscData) // Only include items that have GSC data
+        .filter(item => item.source === 'gsc') // Only include GSC source data
         .map(item => {
-          const gscData = item.gscData;
           return {
             query: item.query,
             url: item.url,
-            serpFeatures: gscData?.serpFeatures || undefined,
-            clicks: gscData?.clicks || undefined,
-            impressions: gscData?.impressions || undefined,
-            ctr: gscData?.ctr ? Math.round(gscData.ctr * 10000) / 100 : undefined,
-            position: gscData?.position ? Math.round(gscData.position * 10) / 10 : undefined,
+            serpFeatures: item.serpFeatures || undefined,
+            clicks: item.clicks || undefined,
+            impressions: item.impressions || undefined,
+            ctr: item.ctr ? Math.round(item.ctr * 10000) / 100 : undefined,
+            position: item.position ? Math.round(item.position * 10) / 10 : undefined,
             // No Ahrefs metrics in comparison mode
             volume: undefined,
             source: 'GSC', // GSC only in comparison mode
@@ -1199,7 +1198,7 @@ export function ClusterDetailModal({
                           })()
                         ) : (
           <DataTable
-                            data={prepareClusterTableData(getUrlTabData(url), false)}
+                            data={getUrlTabData(url)}
                             title={`Data for ${url}`}
                             description={`Combined GSC and Ahrefs metrics for this URL`}
                           />

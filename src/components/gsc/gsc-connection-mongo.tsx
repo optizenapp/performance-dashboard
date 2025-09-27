@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Loader2, Database, CheckCircle, Trash2 } from 'lucide-react';
-import { useGSC } from '@/hooks/useGSC';
+import { useGSC } from '@/contexts/GSCContext';
 import { DateRangePicker } from '@/components/filters/date-range-picker';
 import { getDateRangePreset } from '@/lib/data-utils';
 import { NormalizedMetric } from '@/lib/types';
