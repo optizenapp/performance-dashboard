@@ -1,0 +1,49 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 100">
+  <!-- Sun rays -->
+  <g stroke="#4A90E2" stroke-width="2" fill="none">
+    <line x1="50" y1="15" x2="50" y2="5"/>
+    <line x1="65" y1="18" x2="70" y2="10"/>
+    <line x1="77" y1="25" x2="83" y2="19"/>
+    <line x1="85" y1="35" x2="93" y2="33"/>
+    <line x1="85" y1="45" x2="93" y2="47"/>
+    <line x1="77" y1="55" x2="83" y2="61"/>
+    <line x1="65" y1="62" x2="70" y2="70"/>
+    <line x1="50" y1="65" x2="50" y2="75"/>
+    <line x1="35" y1="62" x2="30" y2="70"/>
+    <line x1="23" y1="55" x2="17" y2="61"/>
+    <line x1="15" y1="45" x2="7" y2="47"/>
+    <line x1="15" y1="35" x2="7" y2="33"/>
+    <line x1="23" y1="25" x2="17" y2="19"/>
+    <line x1="35" y1="18" x2="30" y2="10"/>
+  </g>
+  
+  <!-- Main circle -->
+  <circle cx="50" cy="40" r="25" fill="#4A90E2" stroke="#4A90E2" stroke-width="2"/>
+  
+  <!-- Graduation caps -->
+  <g fill="white">
+    <!-- Left cap -->
+    <rect x="40" y="32" width="8" height="6" rx="1"/>
+    <polygon points="38,32 50,32 49,28 39,28"/>
+    <line x1="49" y1="30" x2="52" y2="27" stroke="white" stroke-width="1"/>
+    <circle cx="52" cy="27" r="1" fill="white"/>
+    
+    <!-- Right cap -->
+    <rect x="52" y="32" width="8" height="6" rx="1"/>
+    <polygon points="50,32 62,32 61,28 51,28"/>
+    <line x1="51" y1="30" x2="48" y2="27" stroke="white" stroke-width="1"/>
+    <circle cx="48" cy="27" r="1" fill="white"/>
+  </g>
+  
+  <!-- Medical cross -->
+  <g fill="white">
+    <rect x="47" y="45" width="6" height="12" rx="1"/>
+    <rect x="44" y="48" width="12" height="6" rx="1"/>
+  </g>
+  
+  <!-- MedCerts text -->
+  <text x="110" y="45" font-family="Arial, sans-serif" font-size="32" font-weight="bold" fill="#2C3E50">MedCerts</text>
+  
+  <!-- Tagline -->
+  <text x="110" y="65" font-family="Arial, sans-serif" font-size="14" fill="#7F8C8D">A Stride Company</text>
+</svg>

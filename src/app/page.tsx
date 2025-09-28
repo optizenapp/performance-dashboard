@@ -3,7 +3,11 @@
 import { useState, useMemo, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Upload, BarChart3, TrendingUp } from 'lucide-react';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Upload, BarChart3, TrendingUp, LogIn, LogOut } from 'lucide-react';
+import Image from 'next/image';
 import { NormalizedMetric, FilterOptions, ChartDataPoint, SectionFilters } from '@/lib/types';
 import { getDateRangePreset } from '@/lib/data-utils';
 import { SOURCES } from '@/lib/types';
@@ -21,6 +25,12 @@ import { saveDataToStorage, loadDataFromStorage, hasStoredData, clearStoredData 
 export default function Dashboard() {
   const [data, setData] = useState<NormalizedMetric[]>([]);
   const [loading, setLoading] = useState(false);
+  
+  // Admin state
+  const [isAdminMode, setIsAdminMode] = useState(false);
+  const [showLoginModal, setShowLoginModal] = useState(false);
+  const [loginPassword, setLoginPassword] = useState('');
+  const [loginError, setLoginError] = useState('');
   
   // GSC state
   const { selectedSite, isAuthenticated, checkAuthStatus, loadSites, sites } = useGSC();
@@ -967,32 +977,97 @@ search console api,https://example.com/api-docs,12,500,25,3.20,80,2024-01-01,60,
     URL.revokeObjectURL(url);
   };
 
+  // Admin functions
+  const handleLogin = () => {
+    const adminPassword = process.env.NEXT_PUBLIC_ADMIN_PASSWORD || 'sdmedcerts-2025';
+    if (loginPassword === adminPassword) {
+      setIsAdminMode(true);
+      setShowLoginModal(false);
+      setLoginPassword('');
+      setLoginError('');
+    } else {
+      setLoginError('Invalid password');
+    }
+  };
+
+  const handleLogout = () => {
+    setIsAdminMode(false);
+  };
+
+  const handleLoginKeyPress = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      handleLogin();
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
       {/* Header */}
       <header className="bg-white dark:bg-gray-800 shadow-sm border-b">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center py-6">
-            <div className="flex items-center space-x-3">
-              <BarChart3 className="h-8 w-8 text-blue-600" />
+            <div className="flex items-center space-x-4">
+              <Image 
+                src="/medcerts-logo.svg" 
+                alt="MedCerts Logo" 
+                width={240} 
+                height={60}
+                className="h-16 w-auto"
+              />
+              <div className="h-8 w-px bg-gray-300 dark:bg-gray-600"></div>
               <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
-                Performance Metrics - Medcerts.com
+                Medcert.com Performance Metrics Dashboard
               </h1>
             </div>
             <div className="flex items-center space-x-4">
-              <span className="text-sm text-gray-600 dark:text-gray-400">
-                Real-time SEO performance data
-              </span>
+              {!isAdminMode ? (
+                <Button 
+                  onClick={() => setShowLoginModal(true)}
+                  variant="outline"
+                  size="sm"
+                  className="flex items-center space-x-2"
+                >
+                  <LogIn className="h-4 w-4" />
+                  <span>Login</span>
+                </Button>
+              ) : (
+                <div className="flex items-center space-x-3">
+                  <span className="text-sm text-green-600 dark:text-green-400 font-medium">
+                    Admin Mode
+                  </span>
+                  <Button 
+                    onClick={handleLogout}
+                    variant="outline"
+                    size="sm"
+                    className="flex items-center space-x-2"
+                  >
+                    <LogOut className="h-4 w-4" />
+                    <span>Logout</span>
+                  </Button>
+                </div>
+              )}
             </div>
           </div>
         </div>
       </header>
 
+      {/* Introduction Text */}
+      <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+          <p className="text-sm text-gray-600 dark:text-gray-400">
+            Below you can view the performance data of Medcerts.com. The data is aggregated from best in class organic data sources to provide relevant performance markers across time.
+            <br />
+            Simply use the data and comparison filters to view performance metrics.
+          </p>
+        </div>
+      </div>
+
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Data Sources Section */}
-        <div className="mb-8">
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+        {/* Data Sources Section - Admin Only */}
+        {isAdminMode && (
+          <div className="mb-8">
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
             Data Sources
           </h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -1066,9 +1141,10 @@ search console api,https://example.com/api-docs,12,500,25,3.20,80,2024-01-01,60,
             </Card>
           </div>
         </div>
+        )}
 
-        {/* Data Status */}
-        {data.length > 0 && (
+        {/* Data Status - Admin Only */}
+        {isAdminMode && data.length > 0 && (
           <div className="mb-8">
             <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border p-6">
               <div className="flex items-center justify-between mb-4">
@@ -1417,6 +1493,50 @@ search console api,https://example.com/api-docs,12,500,25,3.20,80,2024-01-01,60,
           />
         </div>
       </main>
+
+      {/* Admin Login Modal */}
+      <Dialog open={showLoginModal} onOpenChange={setShowLoginModal}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Admin Login</DialogTitle>
+            <DialogDescription>
+              Enter the admin password to access data management features.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="password">Password</Label>
+              <Input
+                id="password"
+                type="password"
+                value={loginPassword}
+                onChange={(e) => setLoginPassword(e.target.value)}
+                onKeyPress={handleLoginKeyPress}
+                placeholder="Enter admin password"
+                className={loginError ? 'border-red-500' : ''}
+              />
+              {loginError && (
+                <p className="text-sm text-red-500">{loginError}</p>
+              )}
+            </div>
+            <div className="flex justify-end space-x-2">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setShowLoginModal(false);
+                  setLoginPassword('');
+                  setLoginError('');
+                }}
+              >
+                Cancel
+              </Button>
+              <Button onClick={handleLogin}>
+                Login
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

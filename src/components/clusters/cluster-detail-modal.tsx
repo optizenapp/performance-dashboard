@@ -1140,7 +1140,6 @@ export function ClusterDetailModal({
                           gscError={urlTableGSCData.error}
                           sectionFilters={sectionFilters}
                           onSectionFiltersChange={setSectionFilters}
-                          hideFilters={true}
                         />
                       </div>
                     </TabsContent>

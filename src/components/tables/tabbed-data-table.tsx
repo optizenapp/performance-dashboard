@@ -82,13 +82,13 @@ export function TabbedDataTable({
         </div>
       </CardHeader>
       <CardContent className="space-y-6">
-        {/* Table-specific filters - only show if not hidden */}
-        {!hideFilters && (
+        {/* Table-specific filters - only show if not hidden AND Ahrefs tab is active */}
+        {!hideFilters && activeTab === 'ahrefs' && (
           <>
             <SectionFilterPanel
-              title="Table Filters"
-              description="Control date range and comparison for table data"
-              icon={<BarChart3 className="h-4 w-4 text-purple-500" />}
+              title="Ahrefs Table Filters"
+              description="Control date range and comparison for Ahrefs table"
+              icon={<BarChart3 className="h-4 w-4 text-orange-500" />}
               filters={sectionFilters}
               onFiltersChange={onSectionFiltersChange}
               className="border border-purple-200 bg-purple-50/50 dark:border-purple-800 dark:bg-purple-900/20"
