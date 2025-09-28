@@ -568,17 +568,17 @@ export class GSCClient {
     dimensions: string[] = ['date']
   ): Promise<GSCMetric[]> {
     try {
-      // For time series, we need to include 'date' dimension
-      if (!dimensions.includes('date')) {
-        dimensions = ['date', ...dimensions];
-      }
+      // For time series, we need to ensure 'date' is always a dimension
+      const finalDimensions = dimensions.includes('date') 
+        ? dimensions 
+        : ['date', ...dimensions];
 
       const request = {
         siteUrl,
         requestBody: {
           startDate,
           endDate,
-          dimensions,
+          dimensions: finalDimensions,
           rowLimit: 25000, // Higher limit for time series
           startRow: 0,
         },
@@ -594,13 +594,14 @@ export class GSCClient {
       // Transform time series data to GSCMetric format
       return data.rows.map((row) => {
         const keys = row.keys || [];
+        const dateIndex = finalDimensions.indexOf('date');
         
         return {
-          date: keys[0], // First dimension should be date
-          query: dimensions.includes('query') ? keys[dimensions.indexOf('query')] || 'Total' : 'Total',
-          page: dimensions.includes('page') ? keys[dimensions.indexOf('page')] : undefined,
-          country: dimensions.includes('country') ? keys[dimensions.indexOf('country')] : undefined,
-          device: dimensions.includes('device') ? keys[dimensions.indexOf('device')] : undefined,
+          date: keys[dateIndex], // Date is now dynamically found
+          query: finalDimensions.includes('query') ? keys[finalDimensions.indexOf('query')] || 'Total' : 'Total',
+          page: finalDimensions.includes('page') ? keys[finalDimensions.indexOf('page')] : undefined,
+          country: finalDimensions.includes('country') ? keys[finalDimensions.indexOf('country')] : undefined,
+          device: finalDimensions.includes('device') ? keys[finalDimensions.indexOf('device')] : undefined,
           clicks: row.clicks || 0,
           impressions: row.impressions || 0,
           ctr: row.ctr || 0,

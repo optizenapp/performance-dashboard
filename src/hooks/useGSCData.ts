@@ -9,7 +9,6 @@ interface UseGSCDataProps {
   dimensions?: string[];
   timeSeries?: boolean;
   enabled?: boolean;
-  quickView?: boolean; // For summary stats, use no dimensions (fastest)
   hookId?: string; // For debugging multiple hook instances
 }
 
@@ -27,7 +26,6 @@ export function useGSCData({
   dimensions = ['query', 'page'],
   timeSeries = false,
   enabled = true,
-  quickView = false,
   hookId = 'unknown'
 }: UseGSCDataProps): GSCDataResult {
   const [data, setData] = useState<NormalizedMetric[]>([]);
@@ -43,7 +41,6 @@ export function useGSCData({
       siteUrl,
       startDate,
       endDate,
-      quickView,
       willProceed: !!(enabled && siteUrl && startDate && endDate)
     });
     
@@ -57,8 +54,7 @@ export function useGSCData({
     setError(null);
 
     try {
-      // For Quick View, use no dimensions for fastest aggregated results
-      const finalDimensions = quickView ? [] : stableDimensions;
+      const finalDimensions = stableDimensions;
       
       console.log('🔄 Fetching GSC data on-demand:', { 
         siteUrl, 
@@ -66,8 +62,7 @@ export function useGSCData({
         endDate, 
         dimensions: finalDimensions, 
         timeSeries,
-        quickView,
-        strategy: quickView ? 'FAST: Aggregated totals only' : 'DETAILED: With dimensions'
+        strategy: timeSeries ? 'TIME-SERIES: Daily data' : 'DETAILED: With dimensions'
       });
 
       const response = await fetch('/api/gsc/data', {
@@ -107,7 +102,7 @@ export function useGSCData({
     } finally {
       setLoading(false);
     }
-  }, [siteUrl, startDate, endDate, stableDimensions, timeSeries, enabled, quickView]);
+  }, [siteUrl, startDate, endDate, stableDimensions, timeSeries, enabled, hookId]);
 
   useEffect(() => {
     fetchData();

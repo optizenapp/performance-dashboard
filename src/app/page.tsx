@@ -97,9 +97,8 @@ export default function Dashboard() {
     siteUrl: selectedSite || undefined,
     startDate: sectionFilters.quickView.dateRange.startDate,
     endDate: sectionFilters.quickView.dateRange.endDate,
-    dimensions: [], // No dimensions for aggregated totals
-    timeSeries: false,
-    quickView: true, // FAST mode for quick overview
+    dimensions: ['date'], // Get daily data
+    timeSeries: true, // Use time series endpoint
     enabled: !!(isAuthenticated && selectedSite && sectionFilters.quickView.dateRange.startDate && sectionFilters.quickView.dateRange.endDate),
     hookId: 'QUICK_VIEW'
   });
@@ -142,9 +141,8 @@ export default function Dashboard() {
     siteUrl: selectedSite || undefined,
     startDate: sectionFilters.quickView.comparisonDateRange?.startDate,
     endDate: sectionFilters.quickView.comparisonDateRange?.endDate,
-    dimensions: [], // No dimensions for aggregated totals
-    timeSeries: false,
-    quickView: true, // FAST mode for quick overview
+    dimensions: ['date'], // Get daily data
+    timeSeries: true, // Use time series endpoint
     enabled: !!(
       isAuthenticated && 
       selectedSite && 
@@ -455,429 +453,105 @@ export default function Dashboard() {
     });
     
     return allComparisonData;
-  }, [chartComparisonGSCData.data, selectedChartMetrics, sectionFilters.chart.enableComparison, chartComparisonGSCData.loading]);
+  }, [chartComparisonGSCData.data, selectedChartMetrics, sectionFilters.chart.enableComparison, chartGSCData.loading]);
 
   // Section-specific summary stats for Quick Overview
   const quickViewStats = useMemo(() => {
-    console.log('🔍 Calculating Quick Overview stats for date range:', {
-    startDate: sectionFilters.quickView.dateRange.startDate,
-    endDate: sectionFilters.quickView.dateRange.endDate,
-      dataPoints: sectionFilteredData.quickView.length,
-      sampleData: sectionFilteredData.quickView.slice(0, 3),
-      comparisonEnabled: sectionFilters.quickView.enableComparison,
-      comparisonPreset: sectionFilters.quickView.comparisonPreset,
-      totalDataPoints: data.length,
-      dateRangeInDays: Math.ceil((new Date(sectionFilters.quickView.dateRange.endDate).getTime() - new Date(sectionFilters.quickView.dateRange.startDate).getTime()) / (1000 * 60 * 60 * 24))
+    console.log('🔍 Calculating Quick Overview stats with new time-series method:', {
+      gscData: quickViewGSCData.data?.length
     });
+
+    // --- BUG HUNTING: Log the exact raw data being used ---
+    console.log(
+      'RAW DATA FOR QUICK VIEW STATS:', 
+      JSON.stringify(quickViewGSCData.data, null, 2)
+    );
 
     const stats = {
-        totalClicks: 0,
-        totalImpressions: 0,
-        avgCTR: 0,
-        avgPosition: 0,
-        totalVolume: 0,
-        totalTraffic: 0,
-      };
-
-    if (sectionFilteredData.quickView.length === 0) {
-      console.log('⚠️ No Quick Overview data for selected date range');
-      return stats;
-    }
-    
-    // Calculate Average Position correctly according to GSC methodology
-    // GSC methodology: "topmost position... averaged across all impressions"
-    
-    console.log('🔍 Quick Overview position debugging:', {
-      totalDataPoints: sectionFilteredData.quickView.length,
-      gscDataPoints: sectionFilteredData.quickView.filter(item => item.source === SOURCES.GSC).length,
-      sampleGSCData: sectionFilteredData.quickView.filter(item => item.source === SOURCES.GSC).slice(0, 3).map(item => ({
-        date: item.date,
-        source: item.source,
-        position: item.position,
-        query: item.query?.substring(0, 20)
-      })),
-      dateRangeCheck: {
-        filterStart: sectionFilters.quickView.dateRange.startDate,
-        filterEnd: sectionFilters.quickView.dateRange.endDate,
-        actualDateRange: {
-          earliest: sectionFilteredData.quickView.length > 0 ? Math.min(...sectionFilteredData.quickView.map(item => new Date(item.date).getTime())) : null,
-          latest: sectionFilteredData.quickView.length > 0 ? Math.max(...sectionFilteredData.quickView.map(item => new Date(item.date).getTime())) : null
-        }
-      }
-    });
-    
-    if (sectionFilteredData.quickView.length > 0) {
-      const actualEarliest = new Date(Math.min(...sectionFilteredData.quickView.map(item => new Date(item.date).getTime()))).toISOString().split('T')[0];
-      const actualLatest = new Date(Math.max(...sectionFilteredData.quickView.map(item => new Date(item.date).getTime()))).toISOString().split('T')[0];
-      console.log('📅 Actual date range in filtered data:', {
-        earliest: actualEarliest,
-        latest: actualLatest,
-        expectedStart: sectionFilters.quickView.dateRange.startDate,
-        expectedEnd: sectionFilters.quickView.dateRange.endDate,
-        matchesExpected: actualEarliest === sectionFilters.quickView.dateRange.startDate && actualLatest === sectionFilters.quickView.dateRange.endDate
-      });
-    }
-
-    // For Quick View, we use aggregated GSC data (no dimensions), which returns totals for the entire period
-    // This data will have the end date assigned to it, which is correct for aggregated metrics
-    const gscTimeSeriesData = sectionFilteredData.quickView.filter(item => 
-      item.source === SOURCES.GSC && 
-      (item.query === 'Total' || item.query === '' || !item.query)
-    );
-    
-    console.log('📊 GSC aggregated data for Quick View:', {
-      totalRows: gscTimeSeriesData.length,
-      sampleData: gscTimeSeriesData.slice(0, 2),
-      explanation: 'Aggregated GSC data represents totals for the entire date range, assigned to end date'
-    });
-    
-    const gscQueryData = sectionFilteredData.quickView.filter(item => 
-      item.source === SOURCES.GSC && 
-      item.query && 
-      item.query !== 'Total' && 
-      item.query !== ''
-    );
-    
-    const ahrefsData = sectionFilteredData.quickView.filter(item => item.source === SOURCES.AHREFS);
-    
-    console.log('📊 Data breakdown for Quick Overview:', {
-      gscTimeSeries: gscTimeSeriesData.length,
-      gscQueryLevel: gscQueryData.length, 
-      ahrefs: ahrefsData.length,
-      total: sectionFilteredData.quickView.length,
-      sampleTimeSeries: gscTimeSeriesData.slice(0, 3).map(item => ({
-        date: item.date,
-        clicks: item.clicks,
-        impressions: item.impressions,
-        query: item.query || 'Total'
-      }))
-    });
-
-    // Calculate totals from GSC time series data (daily aggregates)
-    gscTimeSeriesData.forEach(item => {
-      stats.totalClicks += item.clicks || 0;
-      stats.totalImpressions += item.impressions || 0;
-    });
-    
-    // Add Ahrefs data for volume and traffic
-    ahrefsData.forEach(item => {
-      stats.totalVolume += item.volume || 0;
-      stats.totalTraffic += item.traffic || 0;
-    });
-
-    // Calculate Average Position from query-level GSC data (using correct methodology)
-    // Check date distribution in query-level data
-    const queryDataDates = new Map<string, number>();
-    gscQueryData.forEach(item => {
-      const count = queryDataDates.get(item.date) || 0;
-      queryDataDates.set(item.date, count + 1);
-    });
-    
-    const timeSeriesDataDates = new Map<string, number>();
-    gscTimeSeriesData.forEach(item => {
-      const count = timeSeriesDataDates.get(item.date) || 0;
-      timeSeriesDataDates.set(item.date, count + 1);
-    });
-
-    console.log('🎯 Average Position debugging:', {
-      gscQueryDataCount: gscQueryData.length,
-      gscQueryDataSample: gscQueryData.slice(0, 5).map(item => ({
-        query: item.query?.substring(0, 30),
-        position: item.position,
-        date: item.date,
-        hasPosition: !!item.position,
-        positionType: typeof item.position,
-        positionValue: item.position
-      })),
-      queryDataDateDistribution: Object.fromEntries(queryDataDates.entries()),
-      timeSeriesDateDistribution: Object.fromEntries(timeSeriesDataDates.entries()),
-      dateRangeFilter: {
-        start: sectionFilters.quickView.dateRange.startDate,
-        end: sectionFilters.quickView.dateRange.endDate,
-        daysInRange: Math.ceil((new Date(sectionFilters.quickView.dateRange.endDate).getTime() - new Date(sectionFilters.quickView.dateRange.startDate).getTime()) / (1000 * 60 * 60 * 24))
-      }
-    });
-
-    // GSC Average Position: "topmost position... averaged across all impressions"
-    // Each data point represents an impression, so we need to average across all impressions
-    const allImpressionPositions: number[] = [];
-    
-    gscQueryData.forEach((item, index) => {
-      if (item.position && item.position > 0 && item.query && item.impressions && item.impressions > 0) {
-        // Each item represents impressions for a query on a specific date
-        // We should weight the position by the number of impressions
-        // But since we don't have individual impression positions, we use the position for all impressions of this query/date
-        for (let i = 0; i < item.impressions; i++) {
-          allImpressionPositions.push(item.position);
-        }
-        
-        // Debug first few position entries
-        if (index < 5) {
-          console.log(`📊 Position entry ${index}:`, {
-            query: item.query?.substring(0, 30),
-            position: item.position,
-            impressions: item.impressions,
-            contributedPositions: item.impressions,
-            date: item.date,
-            source: item.source
-          });
-        }
-      } else if (index < 5) {
-        console.log(`⚠️ GSC query item without valid position/impressions:`, {
-          position: item.position,
-          impressions: item.impressions,
-          query: item.query?.substring(0, 20),
-          date: item.date,
-          hasPosition: !!item.position,
-          hasImpressions: !!item.impressions,
-          positionValue: item.position,
-          hasQuery: !!item.query,
-          positionType: typeof item.position
-        });
-      }
-    });
-
-    // Calculate average position across all impressions (true GSC methodology)
-    stats.avgPosition = allImpressionPositions.length > 0 
-      ? allImpressionPositions.reduce((sum, pos) => sum + pos, 0) / allImpressionPositions.length 
-      : 0;
-      
-    console.log('🎯 Average Position calculation result:', {
-      totalImpressionPositions: allImpressionPositions.length,
-      calculatedAvgPosition: stats.avgPosition,
-      hasValidPosition: stats.avgPosition > 0,
-      samplePositions: allImpressionPositions.slice(0, 20), // Show first 20 impression positions
-      uniquePositionValues: [...new Set(allImpressionPositions)].sort((a, b) => a - b).slice(0, 10)
-    });
-    
-    // Check if we have sufficient date coverage for position data
-    const dateRangeStart = new Date(sectionFilters.quickView.dateRange.startDate);
-    const dateRangeEnd = new Date(sectionFilters.quickView.dateRange.endDate);
-    const totalDaysInRange = Math.ceil((dateRangeEnd.getTime() - dateRangeStart.getTime()) / (1000 * 60 * 60 * 24));
-    const daysWithQueryData = queryDataDates.size;
-    const coveragePercentage = (daysWithQueryData / totalDaysInRange) * 100;
-    
-    console.log('📊 Position data coverage analysis:', {
-      totalDaysInRange,
-      daysWithQueryData,
-      coveragePercentage: coveragePercentage.toFixed(1) + '%',
-      sufficientCoverage: coveragePercentage >= 10, // At least 10% coverage
-      queryDataDates: Array.from(queryDataDates.keys()).sort()
-    });
-    
-    // If we have very limited date coverage, use a different approach
-    if (coveragePercentage < 10 && stats.avgPosition > 0) {
-      console.log('⚠️ Limited position data coverage, using time-weighted approach...');
-      
-      // Group position data by date and calculate daily averages
-      const dailyPositions = new Map<string, number[]>();
-      sectionFilteredData.quickView.forEach(item => {
-        if (item.source === SOURCES.GSC && item.position && item.position > 0) {
-          const positions = dailyPositions.get(item.date) || [];
-          positions.push(item.position);
-          dailyPositions.set(item.date, positions);
-        }
-      });
-      
-      // Calculate average position across all available dates
-      let totalWeightedPosition = 0;
-      let totalWeight = 0;
-      
-      dailyPositions.forEach((positions, date) => {
-        const dailyAvg = positions.reduce((sum, pos) => sum + pos, 0) / positions.length;
-        totalWeightedPosition += dailyAvg * positions.length; // Weight by number of queries
-        totalWeight += positions.length;
-      });
-      
-      if (totalWeight > 0) {
-        const timeWeightedAvgPosition = totalWeightedPosition / totalWeight;
-        console.log('🔄 Time-weighted position calculation:', {
-          originalAvgPosition: stats.avgPosition,
-          timeWeightedAvgPosition,
-          datesWithData: dailyPositions.size,
-          totalDataPoints: totalWeight,
-          dailyAverages: Object.fromEntries(
-            Array.from(dailyPositions.entries()).map(([date, positions]) => [
-              date, 
-              (positions.reduce((sum, pos) => sum + pos, 0) / positions.length).toFixed(2)
-            ])
-          )
-        });
-        
-        // Use time-weighted average if it's significantly different
-        stats.avgPosition = timeWeightedAvgPosition;
-      }
-    }
-    
-    // FALLBACK: If no position data at all, try using any GSC position data available
-    if (stats.avgPosition === 0) {
-      console.log('⚠️ No position data found, trying final fallback...');
-      
-      const allGSCPositions: number[] = [];
-      sectionFilteredData.quickView.forEach(item => {
-        if (item.source === SOURCES.GSC && item.position && item.position > 0) {
-          allGSCPositions.push(item.position);
-        }
-      });
-      
-      if (allGSCPositions.length > 0) {
-        stats.avgPosition = allGSCPositions.reduce((sum, pos) => sum + pos, 0) / allGSCPositions.length;
-        console.log('🔄 Final fallback position calculation:', {
-          positionDataPoints: allGSCPositions.length,
-          positions: allGSCPositions.slice(0, 10),
-          fallbackAvgPosition: stats.avgPosition
-        });
-      } else {
-        console.log('❌ No position data found in any GSC data');
-      }
-    }
-    
-    // Calculate CTR from filtered data: CTR = Total Clicks / Total Impressions
-    stats.avgCTR = stats.totalImpressions > 0 ? stats.totalClicks / stats.totalImpressions : 0;
-
-    console.log('📊 Quick Overview calculated stats:', {
-      totalClicks: stats.totalClicks,
-      totalImpressions: stats.totalImpressions,
-      calculatedCTR: stats.avgCTR,
-      calculatedCTRPercent: (stats.avgCTR * 100).toFixed(2) + '%',
-      avgPosition: stats.avgPosition.toFixed(2),
-      dataSourceBreakdown: {
-        clicksFrom: 'GSC Time Series',
-        impressionsFrom: 'GSC Time Series', 
-        ctrFrom: 'Calculated (Clicks/Impressions)',
-        positionFrom: 'GSC Query Data (Weighted by impressions)',
-        timeSeriesDataPoints: gscTimeSeriesData.length,
-        queryDataPoints: gscQueryData.length,
-        totalImpressionPositions: allImpressionPositions.length
-      },
-      totalGSCDataPoints: sectionFilteredData.quickView.filter(item => item.source === SOURCES.GSC).length
-    });
-
-    return stats;
-  }, [sectionFilteredData.quickView, sectionFilters.quickView.dateRange, sectionFilters.quickView.enableComparison, sectionFilters.quickView.comparisonPreset, data.length]);
-
-  // Comparison stats for Quick Overview (when comparison is enabled)
-  const quickViewComparisonStats = useMemo(() => {
-    if (!sectionFilters.quickView.enableComparison || !sectionFilters.quickView.comparisonDateRange) {
-      return null;
-    }
-
-    console.log('🔍 Calculating Quick Overview comparison stats for:', {
-      primaryRange: `${sectionFilters.quickView.dateRange.startDate} to ${sectionFilters.quickView.dateRange.endDate}`,
-      comparisonRange: `${sectionFilters.quickView.comparisonDateRange.startDate} to ${sectionFilters.quickView.comparisonDateRange.endDate}`
-    });
-
-    // Check if comparison period is within available data range
-    const allDates = data.map(item => new Date(item.date)).sort((a, b) => a.getTime() - b.getTime());
-    const earliestDataDate = allDates[0];
-    const comparisonStart = new Date(sectionFilters.quickView.comparisonDateRange.startDate);
-    
-    if (earliestDataDate && comparisonStart < earliestDataDate) {
-      console.warn('⚠️ Comparison period extends before available data:', {
-        comparisonStart: comparisonStart.toISOString().split('T')[0],
-        earliestData: earliestDataDate.toISOString().split('T')[0],
-        daysBefore: Math.ceil((earliestDataDate.getTime() - comparisonStart.getTime()) / (1000 * 60 * 60 * 24))
-      });
-    }
-
-    // Use dedicated comparison GSC data
-    const comparisonData = comparisonGSCData.data || [];
-    
-    console.log('🔍 Comparison GSC data fetch status:', {
-      loading: comparisonGSCData.loading,
-      error: comparisonGSCData.error,
-      dataCount: comparisonData.length,
-      comparisonDateRange: sectionFilters.quickView.comparisonDateRange
-    });
-
-    console.log('📊 Comparison data points:', comparisonData.length);
-
-      const comparisonStats = {
       totalClicks: 0,
       totalImpressions: 0,
       avgCTR: 0,
       avgPosition: 0,
     };
 
-    if (comparisonData.length === 0) {
-      console.log('⚠️ No comparison data for selected range');
-      return { current: quickViewStats, previous: comparisonStats, changes: null };
+    if (!quickViewGSCData.data || quickViewGSCData.data.length === 0) {
+      return stats;
     }
 
-    // Separate GSC time series data (for totals) from query-level data (for averages) - COMPARISON PERIOD
-    const comparisonGscTimeSeriesData = comparisonData.filter(item => 
-      item.source === SOURCES.GSC && 
-      (item.query === 'Total' || item.query === '' || !item.query)
-    );
-    
-    const comparisonGscQueryData = comparisonData.filter(item => 
-      item.source === SOURCES.GSC && 
-      item.query && 
-      item.query !== 'Total' && 
-      item.query !== ''
-    );
-    
-    console.log('📊 Comparison data breakdown:', {
-      gscTimeSeries: comparisonGscTimeSeriesData.length,
-      gscQueryLevel: comparisonGscQueryData.length,
-      total: comparisonData.length,
-      sampleTimeSeries: comparisonGscTimeSeriesData.slice(0, 3).map(item => ({
-        date: item.date,
-        clicks: item.clicks,
-        impressions: item.impressions,
-        query: item.query || 'Total'
-      }))
+    // Sum up the daily data from the time-series
+    quickViewGSCData.data.forEach(item => {
+      stats.totalClicks += item.clicks || 0;
+      stats.totalImpressions += item.impressions || 0;
     });
 
-    // Calculate totals from GSC time series data (daily aggregates) - COMPARISON PERIOD
-    comparisonGscTimeSeriesData.forEach(item => {
-      comparisonStats.totalClicks += item.clicks || 0;
-      comparisonStats.totalImpressions += item.impressions || 0;
-    });
-
-    // Calculate Average Position for comparison period using true GSC methodology
-    // GSC Average Position: "topmost position... averaged across all impressions"
-    const comparisonImpressionPositions: number[] = [];
-
-    comparisonGscQueryData.forEach(item => {
-      // Only use GSC query data for position calculation - weight by impressions
-      if (item.position && item.position > 0 && item.query && item.impressions && item.impressions > 0) {
-        // Each item represents impressions for a query on a specific date
-        // Weight the position by the number of impressions
-        for (let i = 0; i < item.impressions; i++) {
-          comparisonImpressionPositions.push(item.position);
-        }
+    // Calculate CTR and Position from the daily averages
+    let positionSum = 0;
+    let positionCount = 0;
+    quickViewGSCData.data.forEach(item => {
+      if (item.position && item.position > 0) {
+        positionSum += item.position;
+        positionCount++;
       }
     });
 
-    // Calculate comparison period average position across all impressions (true GSC methodology)
-    comparisonStats.avgPosition = comparisonImpressionPositions.length > 0 
-      ? comparisonImpressionPositions.reduce((sum, pos) => sum + pos, 0) / comparisonImpressionPositions.length 
-      : 0;
-    comparisonStats.avgCTR = comparisonStats.totalImpressions > 0 ? comparisonStats.totalClicks / comparisonStats.totalImpressions : 0;
+    stats.avgPosition = positionCount > 0 ? positionSum / positionCount : 0;
+    stats.avgCTR = stats.totalImpressions > 0 ? stats.totalClicks / stats.totalImpressions : 0;
+    
+    console.log('📊 Quick Overview calculated stats:', stats);
+
+    return stats;
+  }, [quickViewGSCData.data]);
+
+  // Comparison stats for Quick Overview (when comparison is enabled)
+  const quickViewComparisonStats = useMemo(() => {
+    if (!sectionFilters.quickView.enableComparison || !comparisonGSCData.data) {
+      return null;
+    }
+
+    const previousStats = {
+      totalClicks: 0,
+      totalImpressions: 0,
+      avgCTR: 0,
+      avgPosition: 0,
+    };
+
+    comparisonGSCData.data.forEach(item => {
+      previousStats.totalClicks += item.clicks || 0;
+      previousStats.totalImpressions += item.impressions || 0;
+    });
+    
+    let positionSum = 0;
+    let positionCount = 0;
+    comparisonGSCData.data.forEach(item => {
+      if (item.position && item.position > 0) {
+        positionSum += item.position;
+        positionCount++;
+      }
+    });
+
+    previousStats.avgPosition = positionCount > 0 ? positionSum / positionCount : 0;
+    previousStats.avgCTR = previousStats.totalImpressions > 0 ? previousStats.totalClicks / previousStats.totalImpressions : 0;
 
     // Calculate percentage changes
     const changes = {
-      clicksChange: comparisonStats.totalClicks > 0 ? 
-        Math.round(((quickViewStats.totalClicks - comparisonStats.totalClicks) / comparisonStats.totalClicks) * 100) : 0,
-      impressionsChange: comparisonStats.totalImpressions > 0 ? 
-        Math.round(((quickViewStats.totalImpressions - comparisonStats.totalImpressions) / comparisonStats.totalImpressions) * 100) : 0,
-      ctrChange: comparisonStats.avgCTR > 0 ? 
-        Math.round(((quickViewStats.avgCTR - comparisonStats.avgCTR) / comparisonStats.avgCTR) * 100) : 0,
-      positionChange: comparisonStats.avgPosition > 0 ? 
-        Math.round(((comparisonStats.avgPosition - quickViewStats.avgPosition) / comparisonStats.avgPosition) * 100) : 0, // Note: lower position is better, so we flip the calculation
+      clicksChange: previousStats.totalClicks > 0 ?
+        Math.round(((quickViewStats.totalClicks - previousStats.totalClicks) / previousStats.totalClicks) * 100) : 0,
+      impressionsChange: previousStats.totalImpressions > 0 ?
+        Math.round(((quickViewStats.totalImpressions - previousStats.totalImpressions) / previousStats.totalImpressions) * 100) : 0,
+      ctrChange: previousStats.avgCTR > 0 ?
+        Math.round(((quickViewStats.avgCTR - previousStats.avgCTR) / previousStats.avgCTR) * 100) : 0,
+      positionChange: previousStats.avgPosition > 0 ?
+        Math.round(((previousStats.avgPosition - quickViewStats.avgPosition) / previousStats.avgPosition) * 100) : 0, // Note: lower position is better
     };
 
     console.log('📈 Comparison results:', {
       current: quickViewStats,
-      previous: comparisonStats,
+      previous: previousStats,
       changes,
-      comparisonImpressionPositions: comparisonImpressionPositions.length,
-      comparisonSamplePositions: comparisonImpressionPositions.slice(0, 10)
     });
 
-    return { current: quickViewStats, previous: comparisonStats, changes };
-  }, [quickViewStats, sectionFilters.quickView.enableComparison, sectionFilters.quickView.comparisonDateRange, sectionFilters.quickView.dateRange.startDate, sectionFilters.quickView.dateRange.endDate, data, filters.sources]);
+    return { current: quickViewStats, previous: previousStats, changes };
+  }, [quickViewStats, sectionFilters.quickView.enableComparison, comparisonGSCData.data]);
 
   // Prepare separate data for tabbed tables
   const ahrefsTableData = useMemo(() => {
