@@ -16,8 +16,7 @@ import {
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { PerformanceChart } from '@/components/charts/performance-chart';
-import { DataTable } from '@/components/tables/data-table';
-import { GSCComparisonTable } from '@/components/tables/gsc-comparison-table';
+import { TabbedDataTable } from '@/components/tables/tabbed-data-table';
 import { SectionFilterPanel } from '@/components/filters/section-filter-panel';
 import { BarChart3, TrendingUp, TrendingDown, Globe, ArrowUpDown } from 'lucide-react';
 import { PerformanceCluster, NormalizedMetric, FilterOptions, ComparisonPreset, ChartDataPoint, SectionFilters } from '@/lib/types';
@@ -46,9 +45,11 @@ export function ClusterDetailModal({
 }: ClusterDetailModalProps) {
   const [selectedUrls, setSelectedUrls] = useState<string[]>([]);
   const [selectedChartMetrics, setSelectedChartMetrics] = useState<string[]>(['clicks']);
+  const [activeUrlTab, setActiveUrlTab] = useState<string>('');
+  
+  // DEPRECATED - using sectionFilters now
   const [enableComparison, setEnableComparison] = useState(false);
   const [comparisonPreset, setComparisonPreset] = useState<ComparisonPreset>('last_30d_vs_previous');
-  const [activeUrlTab, setActiveUrlTab] = useState<string>('');
   
   // Section filters for cluster summary (similar to Quick View)
   const [sectionFilters, setSectionFilters] = useState<SectionFilters>({
@@ -70,7 +71,7 @@ export function ClusterDetailModal({
     }
   }, [cluster, activeUrlTab]);
 
-  // Calculate comparison date ranges for old comparison system
+  // Calculate comparison date ranges for old comparison system - DEPRECATED
   const comparisonDateRanges = useMemo(() => {
     if (!enableComparison) return null;
     
@@ -107,6 +108,36 @@ export function ClusterDetailModal({
     hookId: 'CLUSTER_SUMMARY_COMPARISON'
   });
 
+  // GSC data fetch for URL tables (based on section filters)
+  const urlTableGSCData = useGSCData({
+    siteUrl: selectedSite || undefined,
+    startDate: sectionFilters.dateRange.startDate,
+    endDate: sectionFilters.dateRange.endDate,
+    dimensions: ['query', 'page'],
+    timeSeries: false,
+    quickView: false,
+    enabled: !!(isAuthenticated && selectedSite && sectionFilters.dateRange.startDate && sectionFilters.dateRange.endDate),
+    hookId: 'CLUSTER_URL_TABLES'
+  });
+
+  // GSC data fetch for URL tables comparison (if enabled)
+  const urlTableComparisonGSCData = useGSCData({
+    siteUrl: selectedSite || undefined,
+    startDate: sectionFilters.comparisonDateRange?.startDate,
+    endDate: sectionFilters.comparisonDateRange?.endDate,
+    dimensions: ['query', 'page'],
+    timeSeries: false,
+    quickView: false,
+    enabled: !!(
+      isAuthenticated && 
+      selectedSite && 
+      sectionFilters.enableComparison &&
+      sectionFilters.comparisonDateRange?.startDate && 
+      sectionFilters.comparisonDateRange?.endDate
+    ),
+    hookId: 'CLUSTER_URL_TABLES_COMPARISON'
+  });
+
   // Fetch live GSC data for current period (when comparison is enabled)
   const currentPeriodGSCData = useGSCData({
     siteUrl: selectedSite || undefined,
@@ -141,37 +172,31 @@ export function ClusterDetailModal({
     hookId: 'CLUSTER_COMPARISON'
   });
 
-  // Chart-specific GSC data fetches (with date AND page dimensions for URL filtering)
+  // Chart-specific GSC data fetches (with date AND page dimensions for URL filtering) - UPDATED to use sectionFilters
   const chartCurrentPeriodGSCData = useGSCData({
     siteUrl: selectedSite || undefined,
-    startDate: enableComparison ? comparisonDateRanges?.primary?.startDate : filters.dateRange?.startDate,
-    endDate: enableComparison ? comparisonDateRanges?.primary?.endDate : filters.dateRange?.endDate,
+    startDate: sectionFilters.dateRange.startDate,
+    endDate: sectionFilters.dateRange.endDate,
     dimensions: ['date', 'page'], // Include both date and page for time series + URL filtering
     timeSeries: true,
     quickView: false,
-    enabled: !!(
-      isAuthenticated && 
-      selectedSite && 
-      (enableComparison ? 
-        (comparisonDateRanges?.primary?.startDate && comparisonDateRanges?.primary?.endDate) :
-        (filters.dateRange?.startDate && filters.dateRange?.endDate))
-    ),
+    enabled: !!(isAuthenticated && selectedSite && sectionFilters.dateRange.startDate && sectionFilters.dateRange.endDate),
     hookId: 'CLUSTER_CHART_CURRENT'
   });
 
   const chartComparisonPeriodGSCData = useGSCData({
     siteUrl: selectedSite || undefined,
-    startDate: comparisonDateRanges?.comparison?.startDate,
-    endDate: comparisonDateRanges?.comparison?.endDate,
+    startDate: sectionFilters.comparisonDateRange?.startDate,
+    endDate: sectionFilters.comparisonDateRange?.endDate,
     dimensions: ['date', 'page'], // Include both date and page for time series + URL filtering
     timeSeries: true,
     quickView: false,
     enabled: !!(
-      enableComparison && 
+      sectionFilters.enableComparison && 
       isAuthenticated && 
       selectedSite &&
-      comparisonDateRanges?.comparison?.startDate && 
-      comparisonDateRanges?.comparison?.endDate
+      sectionFilters.comparisonDateRange?.startDate && 
+      sectionFilters.comparisonDateRange?.endDate
     ),
     hookId: 'CLUSTER_CHART_COMPARISON'
   });
@@ -303,28 +328,38 @@ export function ClusterDetailModal({
     return filteredData;
   }, [cluster, data, filters, selectedUrls, enableComparison, comparisonPeriodGSCData.data, comparisonDateRanges]);
 
-  // Convert chart GSC data to chart format (use dedicated chart data)
+  // Convert chart GSC data to chart format (use dedicated chart data) - UPDATED to use sectionFilters
   const chartData = useMemo(() => {
-    // Always use dedicated chart GSC data when comparison is enabled, otherwise use regular GSC data
-    const chartGSCData = enableComparison ? chartCurrentPeriodGSCData.data || [] : (gscData || []);
+    // Always use dedicated chart GSC data (time-series data with date dimension)
+    const chartGSCData = chartCurrentPeriodGSCData.data || [];
     console.log('📊 Converting chart GSC data to chart format:', {
       rawDataLength: chartGSCData.length,
       sampleData: chartGSCData.slice(0, 3),
       selectedMetrics: selectedChartMetrics,
-      enableComparison,
-      usingDedicatedChartData: enableComparison
+      enableComparison: sectionFilters.enableComparison,
+      usingDedicatedChartData: true,
+      uniqueDates: [...new Set(chartGSCData.map(d => d.date))].length
     });
 
     const allChartData: ChartDataPoint[] = [];
     
+    // Filter data for cluster URLs first
+    const filteredChartData = chartGSCData.filter(item => 
+      item.url && cluster?.urls.some(url => 
+        item.url!.toLowerCase().includes(url.toLowerCase()) || 
+        url.toLowerCase().includes(item.url!.toLowerCase())
+      )
+    );
+    
     // Convert each GSC data point to chart format for each selected metric
-    chartGSCData.forEach(item => {
+    filteredChartData.forEach(item => {
     selectedChartMetrics.forEach(metric => {
         if (item[metric as keyof typeof item] !== undefined && item.date) {
           allChartData.push({
             date: item.date,
             metric: metric,
             value: Number(item[metric as keyof typeof item]) || 0,
+            source: 'gsc'
           });
         }
       });
@@ -332,6 +367,7 @@ export function ClusterDetailModal({
 
     console.log('📊 Chart data converted:', {
       inputGSCData: chartGSCData.length,
+      filteredGSCData: filteredChartData.length,
       outputChartData: allChartData.length,
       selectedMetrics: selectedChartMetrics,
       sampleChartData: allChartData.slice(0, 3),
@@ -339,32 +375,41 @@ export function ClusterDetailModal({
     });
 
     return allChartData;
-  }, [chartCurrentPeriodGSCData.data, gscData, selectedChartMetrics, enableComparison]);
+  }, [chartCurrentPeriodGSCData.data, selectedChartMetrics, cluster, sectionFilters.enableComparison]);
 
-  // Convert chart comparison GSC data to chart format (same approach as main page)
+  // Convert chart comparison GSC data to chart format (same approach as main page) - UPDATED to use sectionFilters
   const chartComparisonData = useMemo(() => {
     const gscComparisonData = chartComparisonPeriodGSCData.data || [];
     console.log('📊 Converting chart comparison GSC data to chart format:', {
       rawDataLength: gscComparisonData.length,
       sampleData: gscComparisonData.slice(0, 3),
       selectedMetrics: selectedChartMetrics,
-      enableComparison
+      enableComparison: sectionFilters.enableComparison
     });
 
-    if (!enableComparison || gscComparisonData.length === 0) {
+    if (!sectionFilters.enableComparison || gscComparisonData.length === 0) {
       return [];
     }
 
     const allComparisonChartData: ChartDataPoint[] = [];
     
+    // Filter data for cluster URLs first
+    const filteredComparisonData = gscComparisonData.filter(item => 
+      item.url && cluster?.urls.some(url => 
+        item.url!.toLowerCase().includes(url.toLowerCase()) || 
+        url.toLowerCase().includes(item.url!.toLowerCase())
+      )
+    );
+    
     // Convert each GSC comparison data point to chart format for each selected metric
-    gscComparisonData.forEach(item => {
+    filteredComparisonData.forEach(item => {
       selectedChartMetrics.forEach(metric => {
         if (item[metric as keyof typeof item] !== undefined && item.date) {
           allComparisonChartData.push({
             date: item.date,
             metric: metric,
             value: Number(item[metric as keyof typeof item]) || 0,
+            source: 'gsc'
           });
         }
       });
@@ -379,9 +424,35 @@ export function ClusterDetailModal({
     });
 
     return allComparisonChartData;
-  }, [chartComparisonPeriodGSCData.data, selectedChartMetrics, enableComparison]);
+  }, [chartComparisonPeriodGSCData.data, selectedChartMetrics, cluster, sectionFilters.enableComparison]);
 
-  // Prepare data for each URL tab (combines GSC and Ahrefs data for specific URL)
+  // Helper function to get GSC data for a specific URL
+  const getUrlGSCData = useMemo(() => {
+    return (url: string) => {
+      if (!urlTableGSCData.data) return [];
+      return urlTableGSCData.data.filter(item => item.url === url);
+    };
+  }, [urlTableGSCData.data]);
+
+  // Helper function to get GSC comparison data for a specific URL
+  const getUrlGSCComparisonData = useMemo(() => {
+    return (url: string) => {
+      if (!urlTableComparisonGSCData.data) return [];
+      return urlTableComparisonGSCData.data.filter(item => item.url === url);
+    };
+  }, [urlTableComparisonGSCData.data]);
+
+  // Helper function to get Ahrefs data for a specific URL
+  const getUrlAhrefsData = useMemo(() => {
+    return (url: string) => {
+      if (!cluster) return [];
+      return clusterData.filter(item => 
+        item.source === 'ahrefs' && item.url === url
+      );
+    };
+  }, [cluster, clusterData]);
+
+  // Prepare data for each URL tab (combines GSC and Ahrefs data for specific URL) - LEGACY for old DataTable
   const getUrlTabData = useMemo(() => {
     return (url: string) => {
       if (!cluster) return [];
@@ -461,58 +532,7 @@ export function ClusterDetailModal({
     };
   }, [cluster, clusterData]);
 
-  // Custom table data preparation for cluster modal
-  const prepareClusterTableData = (data: NormalizedMetric[], enableComparison = false) => {
-    if (enableComparison) {
-      // Comparison mode: Show only GSC data with comparison functionality
-      return data
-        .filter(item => item.source === 'gsc') // Only include GSC source data
-        .map(item => {
-          return {
-            query: item.query,
-            url: item.url,
-            serpFeatures: item.serpFeatures || undefined,
-            clicks: item.clicks || undefined,
-            impressions: item.impressions || undefined,
-            ctr: item.ctr ? Math.round(item.ctr * 10000) / 100 : undefined,
-            position: item.position ? Math.round(item.position * 10) / 10 : undefined,
-            // No Ahrefs metrics in comparison mode
-            volume: undefined,
-            source: 'GSC', // GSC only in comparison mode
-            // Comparison fields (will be populated by prepareTableData)
-            change: undefined,
-            clicksChange: undefined,
-            impressionsChange: undefined,
-            ctrChange: undefined,
-            positionChange: undefined,
-          };
-        })
-        .sort((a, b) => (b.clicks || 0) - (a.clicks || 0));
-    } else {
-      // Non-comparison mode: Show combined GSC + Ahrefs data
-      return data.map(item => ({
-        query: item.query,
-        url: item.url,
-        serpFeatures: item.serpFeatures || undefined,
-        clicks: item.clicks || undefined,
-        impressions: item.impressions || undefined,
-        ctr: item.ctr ? Math.round(item.ctr * 10000) / 100 : undefined,
-        position: item.position ? Math.round(item.position * 10) / 10 : undefined,
-        volume: item.volume || undefined, // Include Ahrefs volume in non-comparison mode
-        source: 'Combined',
-        // Non-comparison fields
-        change: undefined,
-        clicksChange: undefined,
-        impressionsChange: undefined,
-        ctrChange: undefined,
-        positionChange: undefined,
-      })).sort((a, b) => (b.clicks || 0) - (a.clicks || 0));
-    }
-  };
 
-  const tableData = useMemo(() => {
-    return prepareTableData(clusterData);
-  }, [clusterData]);
 
   // Calculate summary stats with comparison
   const summaryStats = useMemo(() => {
@@ -732,50 +752,6 @@ export function ClusterDetailModal({
             showComparisonPresets={true}
           />
 
-          {/* Comparison Controls */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Comparison Settings</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex items-center justify-between">
-                <Label htmlFor="enable-comparison" className="text-sm font-medium">
-                  Enable Comparison
-                </Label>
-                <Switch
-                  id="enable-comparison"
-                  checked={enableComparison}
-                  onCheckedChange={setEnableComparison}
-                />
-              </div>
-              
-              {enableComparison && (
-                <div className="space-y-2">
-                  <Label className="text-sm font-medium">Comparison Period</Label>
-                  <Select value={comparisonPreset} onValueChange={(value: ComparisonPreset) => setComparisonPreset(value)}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="last_24h_vs_previous">Compare last 24 hours to previous period</SelectItem>
-                      <SelectItem value="last_7d_vs_previous">Compare last 7 days to previous period</SelectItem>
-                      <SelectItem value="last_28d_vs_previous">Compare last 28 days to previous period</SelectItem>
-                      <SelectItem value="last_3m_vs_previous">Compare last 3 months to previous period</SelectItem>
-                      <SelectItem value="last_6m_vs_previous">Compare last 6 months to previous period</SelectItem>
-                      <SelectItem value="last_7d_week_over_week">Compare last 7 days week over week</SelectItem>
-                      <SelectItem value="last_28d_year_over_year">Compare last 28 days year over year</SelectItem>
-                    </SelectContent>
-                  </Select>
-                {comparisonDateRanges?.primary && comparisonDateRanges?.comparison && (
-                  <div className="text-xs text-gray-500 space-y-1">
-                    <div>Current: {comparisonDateRanges.primary.startDate} to {comparisonDateRanges.primary.endDate}</div>
-                    <div>Previous: {comparisonDateRanges.comparison.startDate} to {comparisonDateRanges.comparison.endDate}</div>
-                  </div>
-                )}
-                </div>
-              )}
-            </CardContent>
-          </Card>
 
           {/* URL Selection */}
           <Card>
@@ -824,7 +800,7 @@ export function ClusterDetailModal({
                 <div className="text-2xl font-bold">
                   {summaryStats.current.totalClicks.toLocaleString()}
                 </div>
-                {enableComparison && summaryStats.changes && (
+                {sectionFilters.enableComparison && summaryStats.changes && summaryStats.previous && (
                   <>
                     <div className={`text-sm flex items-center mt-1 ${
                       summaryStats.changes.clicksChangePercent > 0 ? 'text-green-600' : 
@@ -840,7 +816,10 @@ export function ClusterDetailModal({
                       {summaryStats.changes.clicksChangePercent > 0 ? '+' : ''}{summaryStats.changes.clicksChangePercent.toFixed(1)}%
                     </div>
                     <div className="text-xs text-muted-foreground mt-1">
-                      Current: {summaryStats.current.totalClicks.toLocaleString()} | Previous: {summaryStats.previous?.totalClicks.toLocaleString() || 'N/A'}
+                      Current: {summaryStats.current.totalClicks.toLocaleString()} | Previous: {summaryStats.previous.totalClicks.toLocaleString()}
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      Change: {summaryStats.changes.clicksChange > 0 ? '+' : ''}{summaryStats.changes.clicksChange.toLocaleString()}
                     </div>
                   </>
                 )}
@@ -856,7 +835,7 @@ export function ClusterDetailModal({
                 <div className="text-2xl font-bold">
                   {summaryStats.current.totalImpressions.toLocaleString()}
                 </div>
-                {enableComparison && summaryStats.changes && (
+                {sectionFilters.enableComparison && summaryStats.changes && summaryStats.previous && (
                   <>
                     <div className={`text-sm flex items-center mt-1 ${
                       summaryStats.changes.impressionsChangePercent > 0 ? 'text-green-600' : 
@@ -872,7 +851,10 @@ export function ClusterDetailModal({
                       {summaryStats.changes.impressionsChangePercent > 0 ? '+' : ''}{summaryStats.changes.impressionsChangePercent.toFixed(1)}%
                     </div>
                     <div className="text-xs text-muted-foreground mt-1">
-                      Current: {summaryStats.current.totalImpressions.toLocaleString()} | Previous: {summaryStats.previous?.totalImpressions.toLocaleString() || 'N/A'}
+                      Current: {summaryStats.current.totalImpressions.toLocaleString()} | Previous: {summaryStats.previous.totalImpressions.toLocaleString()}
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      Change: {summaryStats.changes.impressionsChange > 0 ? '+' : ''}{summaryStats.changes.impressionsChange.toLocaleString()}
                     </div>
                   </>
                 )}
@@ -888,7 +870,7 @@ export function ClusterDetailModal({
                 <div className="text-2xl font-bold">
                   {summaryStats.current.avgCTR > 0 ? (summaryStats.current.avgCTR * 100).toFixed(2) : 'N/A'}%
                 </div>
-                {enableComparison && summaryStats.changes && summaryStats.current.avgCTR > 0 && (
+                {sectionFilters.enableComparison && summaryStats.changes && summaryStats.previous && summaryStats.current.avgCTR > 0 && (
                   <>
                     <div className={`text-sm flex items-center mt-1 ${
                       summaryStats.changes.ctrChangePercent > 0 ? 'text-green-600' : 
@@ -904,7 +886,10 @@ export function ClusterDetailModal({
                       {summaryStats.changes.ctrChangePercent > 0 ? '+' : ''}{summaryStats.changes.ctrChangePercent.toFixed(1)}%
                     </div>
                     <div className="text-xs text-muted-foreground mt-1">
-                      Current: {(summaryStats.current.avgCTR * 100).toFixed(2)}% | Previous: {summaryStats.previous?.avgCTR ? (summaryStats.previous.avgCTR * 100).toFixed(2) + '%' : 'N/A'}
+                      Current: {(summaryStats.current.avgCTR * 100).toFixed(2)}% | Previous: {summaryStats.previous.avgCTR ? (summaryStats.previous.avgCTR * 100).toFixed(2) + '%' : 'N/A'}
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      Change: {summaryStats.changes.ctrChange > 0 ? '+' : ''}{(summaryStats.changes.ctrChange * 100).toFixed(2)}pp
                     </div>
                   </>
                 )}
@@ -920,7 +905,7 @@ export function ClusterDetailModal({
                 <div className="text-2xl font-bold">
                   {summaryStats.current.avgPosition > 0 ? summaryStats.current.avgPosition.toFixed(1) : 'N/A'}
                 </div>
-                {enableComparison && summaryStats.changes && summaryStats.current.avgPosition > 0 && (
+                {sectionFilters.enableComparison && summaryStats.changes && summaryStats.previous && summaryStats.current.avgPosition > 0 && (
                   <>
                     <div className={`text-sm flex items-center mt-1 ${
                       summaryStats.changes.positionChangePercent > 0 ? 'text-green-600' : 
@@ -936,7 +921,10 @@ export function ClusterDetailModal({
                       {summaryStats.changes.positionChangePercent > 0 ? '+' : ''}{summaryStats.changes.positionChangePercent.toFixed(1)}%
                     </div>
                     <div className="text-xs text-muted-foreground mt-1">
-                      Current: {summaryStats.current.avgPosition.toFixed(1)} | Previous: {summaryStats.previous?.avgPosition ? summaryStats.previous.avgPosition.toFixed(1) : 'N/A'}
+                      Current: {summaryStats.current.avgPosition.toFixed(1)} | Previous: {summaryStats.previous.avgPosition ? summaryStats.previous.avgPosition.toFixed(1) : 'N/A'}
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      Change: {summaryStats.changes.positionChange > 0 ? '+' : ''}{summaryStats.changes.positionChange.toFixed(1)} positions
                     </div>
                   </>
                 )}
@@ -970,10 +958,9 @@ export function ClusterDetailModal({
             selectedMetrics={selectedChartMetrics}
             onMetricsChange={setSelectedChartMetrics}
             availableMetrics={filters.metrics}
-            sectionFilters={{ 
-              enableComparison,
-              dateRange: { startDate: '', endDate: '' } // Dummy values to satisfy type
-            }}
+            sectionFilters={sectionFilters}
+            loading={chartCurrentPeriodGSCData.loading}
+            error={chartCurrentPeriodGSCData.error}
             title={`${cluster.name} - Performance Trends`}
             description={`Performance metrics for ${selectedUrls.length} selected URLs`}
           />
@@ -1109,7 +1096,7 @@ export function ClusterDetailModal({
                             return urlChartData;
                           })()}
                           comparisonData={(() => {
-                            if (!enableComparison) return [];
+                            if (!sectionFilters.enableComparison) return [];
                             
                             // Create URL-specific comparison chart data
                             const urlComparisonGSCData = (chartComparisonPeriodGSCData.data || []).filter(item => item.url === url);
@@ -1134,75 +1121,27 @@ export function ClusterDetailModal({
                           selectedMetrics={selectedChartMetrics}
                           onMetricsChange={setSelectedChartMetrics}
                           availableMetrics={filters.metrics}
-                          sectionFilters={{ 
-                            enableComparison,
-                            dateRange: comparisonDateRanges?.primary || { startDate: '', endDate: '' }
-                          }}
+                          sectionFilters={sectionFilters}
+                          loading={chartCurrentPeriodGSCData.loading}
+                          error={chartCurrentPeriodGSCData.error}
                           title={`Performance Trends - ${url.split('/').pop() || 'URL'}`}
                           description={`Performance metrics over time for this specific URL`}
                         />
                         
                         {/* URL-specific Data Table */}
-                        {enableComparison ? (
-                          (() => {
-                            const currentData = (currentPeriodGSCData.data || []).filter(item => item.url === url);
-                            const comparisonData = (comparisonPeriodGSCData.data || []).filter(item => item.url === url);
-                            
-                            console.log(`📊 GSCComparisonTable data for ${url}:`, {
-                              currentDataCount: currentData.length,
-                              comparisonDataCount: comparisonData.length,
-                              currentLoading: currentPeriodGSCData.loading,
-                              comparisonLoading: comparisonPeriodGSCData.loading,
-                              currentError: currentPeriodGSCData.error,
-                              comparisonError: comparisonPeriodGSCData.error,
-                              sectionFilters: {
-                                enableComparison: true,
-                                dateRange: comparisonDateRanges?.primary,
-                                comparisonDateRange: comparisonDateRanges?.comparison
-                              },
-                              currentSample: currentData.slice(0, 2).map(item => ({
-                                query: item.query,
-                                url: item.url,
-                                clicks: item.clicks,
-                                impressions: item.impressions,
-                                ctr: item.ctr,
-                                position: item.position,
-                                date: item.date,
-                                source: item.source
-                              })),
-                              comparisonSample: comparisonData.slice(0, 2).map(item => ({
-                                query: item.query,
-                                url: item.url,
-                                clicks: item.clicks,
-                                impressions: item.impressions,
-                                ctr: item.ctr,
-                                position: item.position,
-                                date: item.date,
-                                source: item.source
-                              }))
-                            });
-                            
-                            return (
-                              <GSCComparisonTable
-                                data={currentData}
-                                comparisonData={comparisonData}
-                                loading={currentPeriodGSCData.loading || comparisonPeriodGSCData.loading}
-                                error={currentPeriodGSCData.error || comparisonPeriodGSCData.error}
-                                sectionFilters={{
-                                  dateRange: comparisonDateRanges?.primary || { startDate: '', endDate: '' },
-                                  comparisonDateRange: comparisonDateRanges?.comparison || { startDate: '', endDate: '' },
-                                  enableComparison: true
-                                }}
-                              />
-                            );
-                          })()
-                        ) : (
-          <DataTable
-                            data={getUrlTabData(url)}
-                            title={`Data for ${url}`}
-                            description={`Combined GSC and Ahrefs metrics for this URL`}
-                          />
-                        )}
+                        <TabbedDataTable
+                          data={getUrlAhrefsData(url)}
+                          gscData={getUrlGSCData(url)}
+                          gscComparisonData={getUrlGSCComparisonData(url)}
+                          ahrefsCurrentPeriodData={getUrlAhrefsData(url)}
+                          ahrefsComparisonData={getUrlAhrefsData(url)}
+                          loading={false}
+                          gscLoading={urlTableGSCData.loading}
+                          gscError={urlTableGSCData.error}
+                          sectionFilters={sectionFilters}
+                          onSectionFiltersChange={setSectionFilters}
+                          hideFilters={true}
+                        />
                       </div>
                     </TabsContent>
                   ))}

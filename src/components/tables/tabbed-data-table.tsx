@@ -24,6 +24,7 @@ interface TabbedDataTableProps {
   gscError?: string | null; // NEW: GSC error state
   sectionFilters: SectionFilters;
   onSectionFiltersChange: (filters: SectionFilters) => void;
+  hideFilters?: boolean; // NEW: Hide the internal filter panel (for cluster modal)
 }
 
 export function TabbedDataTable({
@@ -38,6 +39,7 @@ export function TabbedDataTable({
   gscError = null,
   sectionFilters,
   onSectionFiltersChange,
+  hideFilters = false,
 }: TabbedDataTableProps) {
   const [activeTab, setActiveTab] = useState('gsc');
 
@@ -80,24 +82,28 @@ export function TabbedDataTable({
         </div>
       </CardHeader>
       <CardContent className="space-y-6">
-        {/* Table-specific filters */}
-        <SectionFilterPanel
-          title="Table Filters"
-          description="Control date range and comparison for table data"
-          icon={<BarChart3 className="h-4 w-4 text-purple-500" />}
-          filters={sectionFilters}
-          onFiltersChange={onSectionFiltersChange}
-          className="border border-purple-200 bg-purple-50/50 dark:border-purple-800 dark:bg-purple-900/20"
-          activeTab={activeTab} // Pass active tab for Ahrefs-specific filters
-        />
-        
-        {/* Table date range display */}
-        <div className="flex items-center justify-between text-sm text-gray-600 dark:text-gray-400">
-          <span>Table showing data for:</span>
-          <span>
-            {new Date(sectionFilters.dateRange.startDate).toISOString().split('T')[0]} - {new Date(sectionFilters.dateRange.endDate).toISOString().split('T')[0]}
-          </span>
-        </div>
+        {/* Table-specific filters - only show if not hidden */}
+        {!hideFilters && (
+          <>
+            <SectionFilterPanel
+              title="Table Filters"
+              description="Control date range and comparison for table data"
+              icon={<BarChart3 className="h-4 w-4 text-purple-500" />}
+              filters={sectionFilters}
+              onFiltersChange={onSectionFiltersChange}
+              className="border border-purple-200 bg-purple-50/50 dark:border-purple-800 dark:bg-purple-900/20"
+              activeTab={activeTab} // Pass active tab for Ahrefs-specific filters
+            />
+            
+            {/* Table date range display */}
+            <div className="flex items-center justify-between text-sm text-gray-600 dark:text-gray-400">
+              <span>Table showing data for:</span>
+              <span>
+                {new Date(sectionFilters.dateRange.startDate).toISOString().split('T')[0]} - {new Date(sectionFilters.dateRange.endDate).toISOString().split('T')[0]}
+              </span>
+            </div>
+          </>
+        )}
         
         {/* Tabbed Tables */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
